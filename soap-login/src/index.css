@@ -1,0 +1,32 @@
+body {
+  margin: 0;
+  font-family: 'Kanit', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Kanit', sans-serif;
+  font-weight: 700;
+}
+
+p, span, a, li, button, input, textarea {
+  font-family: 'Kanit', sans-serif;
+  font-weight: 400;
+}
+
+.additional-info {
+  color: blue;
+  text-align: left;
+  margin-top: 20px;
+  font-family: 'Kanit', sans-serif;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}

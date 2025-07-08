@@ -1,0 +1,68 @@
+version: '3.8' # ระบุ Docker Compose version
+
+services:
+  # Node.js Backend Service
+  backend:
+    build:
+      context: ./soap-login-server # ระบุ path ของ Dockerfile context
+      dockerfile: Dockerfile       # ระบุชื่อ Dockerfile
+    container_name: soap-login-backend # กำหนดชื่อ Container ให้ชัดเจน
+    ports:
+      - "5000:5000" # Host_Port:Container_Port - Backend จะรันบนพอร์ต 5000 ทั้งบน Host และใน Container
+    environment:
+      # Environment Variables สำหรับ Node.js Backend เพื่อเชื่อมต่อ MySQL และ JWT
+      MYSQL_HOST: db                  # ชี้ไปที่ชื่อ Service ของ MySQL ใน Docker Compose network
+      MYSQL_USER: ${DB_USER}          # ดึงค่าจากไฟล์ .env
+      MYSQL_PASSWORD: ${DB_PASSWORD}  # ดึงค่าจากไฟล์ .env
+      MYSQL_DATABASE: ${DB_DATABASE}  # ดึงค่าจากไฟล์ .env
+      JWT_SECRET: ${JWT_SECRET}       # ดึงค่าจากไฟล์ .env
+      NODE_ENV: production            # ตั้งค่าเป็น production เพื่อประสิทธิภาพและความปลอดภัย
+    depends_on:
+      - db # Backend จะเริ่มหลังจาก Database พร้อมใช้งาน
+    networks:
+      - app_network # เชื่อมต่อกับ Network ที่กำหนดเอง
+    restart: always # กำหนดให้ Container รันใหม่เสมอหากหยุดทำงาน
+
+  # React Frontend Service (Served by Nginx)
+  frontend:
+    build:
+      context: ./soap-login # ระบุ path ของ Dockerfile context
+      dockerfile: Dockerfile    # ระบุชื่อ Dockerfile
+    container_name: soap-login-frontend # กำหนดชื่อ Container ให้ชัดเจน
+    ports:
+      - "80:80" # Host_Port:Container_Port - Frontend (Nginx) จะรันบนพอร์ต 80
+    environment:
+      # สำหรับ React (Create React App) ที่ต้องทราบ URL ของ Backend API
+      # เนื่องจากจะใช้ Nginx Reverse Proxy, Frontend จะเรียก API ผ่าน path /api
+      REACT_APP_BACKEND_URL: /api
+    depends_on:
+      - backend # Frontend จะเริ่มหลังจาก Backend พร้อมใช้งาน (เพื่อให้มั่นใจว่า API พร้อม)
+    networks:
+      - app_network # เชื่อมต่อกับ Network ที่กำหนดเอง
+    restart: always # กำหนดให้ Container รันใหม่เสมอหากหยุดทำงาน
+
+  # MySQL Database Service
+  db:
+    image: mysql:8.0 # ใช้ Docker Image ของ MySQL version 8.0
+    container_name: soap-login-mysql # กำหนดชื่อ Container ให้ชัดเจน
+    restart: unless-stopped # กำหนดให้ Container รันใหม่เสมอ ยกเว้นถูกสั่งหยุดด้วยตนเอง
+    environment:
+      # Environment Variables สำหรับตั้งค่า MySQL Database
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD} # รหัสผ่าน root ของ MySQL (ดึงจาก .env)
+      MYSQL_DATABASE: ${DB_DATABASE}      # ชื่อ Database ที่จะสร้าง (ดึงจาก .env)
+      MYSQL_USER: ${DB_USER}              # ชื่อผู้ใช้สำหรับแอปพลิเคชัน (ดึงจาก .env)
+      MYSQL_PASSWORD: ${DB_PASSWORD}      # รหัสผ่านสำหรับผู้ใช้แอปพลิเคชัน (ดึงจาก .env)
+    volumes:
+      - mysql_data:/var/lib/mysql            # Persistent Volume สำหรับเก็บข้อมูล MySQL
+      - ./mysql-init:/docker-entrypoint-initdb.d # Mount โฟลเดอร์สำหรับ Initial SQL scripts
+    networks:
+      - app_network # เชื่อมต่อกับ Network ที่กำหนดเอง
+
+# Docker Volumes สำหรับเก็บข้อมูลถาวร
+volumes:
+  mysql_data: # Volume สำหรับข้อมูล MySQL
+
+# Docker Networks สำหรับให้ Services สื่อสารกัน
+networks:
+  app_network:
+    driver: bridge # ใช้ Bridge network

@@ -1,0 +1,23 @@
+# Ignore environment variables file
+/.env
+
+# Ignore Node.js modules for Frontend
+/soap-login/node_modules
+
+# Ignore Node.js modules for Backend
+/soap-login-server/node_modules
+
+# Ignore React build output
+/soap-login/build
+
+# Ignore logs
+*.log
+logs/
+
+# Ignore temporary files
+*.tmp
+*.swp
+
+# Ignore OS generated files
+.DS_Store
+Thumbs.db
