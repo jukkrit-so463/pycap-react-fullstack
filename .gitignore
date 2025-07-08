@@ -21,3 +21,9 @@ logs/
 # Ignore OS generated files
 .DS_Store
 Thumbs.db
+
+
+# Ignore Node.js package files at root if not part of a workspace setup
+/package.json
+/package-lock.json
+/npm-debug.log
