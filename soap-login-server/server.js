@@ -11,11 +11,12 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // MySQL connection
+
 const db = mysql.createConnection({
-  host: process.env.DB_HOST,  // Your database host
-  user: process.env.DB_USER,       // Your database user
-  password: process.env.DB_PASSWORD,       // Your database password
-  database: process.env.DB_DATABASE // Your database name
+  host: process.env.MYSQL_HOST,    // << แก้ตรงนี้
+  user: process.env.MYSQL_USER,    // << แก้ตรงนี้
+  password: process.env.MYSQL_PASSWORD,  // << แก้ตรงนี้
+  database: process.env.MYSQL_DATABASE // << แก้ตรงนี้
 });
 
 db.connect(err => {
