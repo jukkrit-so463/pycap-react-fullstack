@@ -66,7 +66,7 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
       timeout: 20s # เวลาที่รอการตอบสนอง
       retries: 10  # จำนวนครั้งที่ลองใหม่หากล้มเหลว
-      start_period: 30s # << สำคัญมาก: ให้เวลา DB เริ่มต้นก่อนเริ่มเช็ค health
+      start_period: 60s # << สำคัญมาก: ให้เวลา DB เริ่มต้นก่อนเริ่มเช็ค health
       interval: 5s # ตรวจสอบทุกๆ 5 วินาที
 
 # Docker Volumes สำหรับเก็บข้อมูลถาวร
