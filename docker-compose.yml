@@ -47,29 +47,28 @@ services:
     restart: always # กำหนดให้ Container รันใหม่เสมอหากหยุดทำงาน
 
   # MySQL Database Service
-  db:
-    image: mysql:8.0
-    container_name: soap-login-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_DATABASE}
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - mysql_data:/var/lib/mysql            # Persistent Volume สำหรับเก็บข้อมูล MySQL
-      - ./mysql-init:/docker-entrypoint-initdb.d # Mount โฟลเดอร์สำหรับ Initial SQL scripts
-    ports:
-      - "3306:3306
-    networks:
-      - app_network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
-      timeout: 20s
-      retries: 10
-      start_period: 60s # รักษาค่านี้ไว้
-      interval: 5s
-
+  db:  # <- ไม่มี Space นำหน้า 'db:'
+    image: mysql:8.0 # <- 2 Spaces นำหน้า 'image:'
+    container_name: soap-login-mysql # <- 2 Spaces นำหน้า 'container_name:'
+    restart: unless-stopped # <- 2 Spaces นำหน้า 'restart:'
+    environment: # <- 2 Spaces นำหน้า 'environment:'
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD} # <- 4 Spaces นำหน้า 'MYSQL_ROOT_PASSWORD:'
+      MYSQL_DATABASE: ${DB_DATABASE} # <- 4 Spaces นำหน้า 'MYSQL_DATABASE:'
+      MYSQL_USER: ${DB_USER} # <- 4 Spaces นำหน้า 'MYSQL_USER:'
+      MYSQL_PASSWORD: ${DB_PASSWORD} # <- 4 Spaces นำหน้า 'MYSQL_PASSWORD:'
+    volumes: # <- 2 Spaces นำหน้า 'volumes:' (น่าจะเป็นบรรทัดที่ 63 หรือใกล้เคียง)
+      - mysql_data:/var/lib/mysql # <- 4 Spaces และมีขีด '-' นำหน้า
+      - ./mysql-init:/docker-entrypoint-initdb.d # <- 4 Spaces และมีขีด '-' นำหน้า
+    ports: # <- 2 Spaces นำหน้า 'ports:' (อาจจะเป็นบรรทัดที่ 67 หรือใกล้เคียง)
+      - "3306:3306" # <- 4 Spaces และมีขีด '-' นำหน้า
+    networks: # <- 2 Spaces นำหน้า 'networks:'
+      - app_network # <- 4 Spaces และมีขีด '-' นำหน้า
+    healthcheck: # <- 2 Spaces นำหน้า 'healthcheck:'
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"] # <- 4 Spaces นำหน้า
+      timeout: 20s # <- 4 Spaces นำหน้า
+      retries: 10 # <- 4 Spaces นำหน้า
+      start_period: 60s # <- 4 Spaces นำหน้า
+      interval: 5s # <- 4 Spaces นำหน้า
 # Docker Volumes สำหรับเก็บข้อมูลถาวร
 volumes:
   mysql_data: # Volume สำหรับข้อมูล MySQL
