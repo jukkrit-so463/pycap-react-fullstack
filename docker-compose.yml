@@ -18,7 +18,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}       # ดึงค่าจากไฟล์ .env
       NODE_ENV: production            # ตั้งค่าเป็น production เพื่อประสิทธิภาพและความปลอดภัย
     depends_on:
-      - db # Backend จะเริ่มหลังจาก Database พร้อมใช้งาน
+      db:
+        condition: service_healthy
     networks:
       - app_network # เชื่อมต่อกับ Network ที่กำหนดเอง
     restart: always # กำหนดให้ Container รันใหม่เสมอหากหยุดทำงาน
@@ -35,6 +36,10 @@ services:
       # สำหรับ React (Create React App) ที่ต้องทราบ URL ของ Backend API
       # เนื่องจากจะใช้ Nginx Reverse Proxy, Frontend จะเรียก API ผ่าน path /api
       REACT_APP_BACKEND_URL: /api
+      # SOAP service configuration
+      REACT_APP_SOAP_SERVICE_URL: http://10.106.0.210
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - backend # Frontend จะเริ่มหลังจาก Backend พร้อมใช้งาน (เพื่อให้มั่นใจว่า API พร้อม)
     networks:
@@ -58,7 +63,13 @@ services:
     ports:
       - "3306:3306"
     networks:
-      - app_network # เชื่อมต่อกับ Network ที่กำหนดเอง
+      - app_network
+    healthcheck: # << เพิ่ม block healthcheck นี้ทั้งย่อหน้า (ถ้ายังไม่มี)
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
+      timeout: 20s # เวลาที่รอการตอบสนอง
+      retries: 10  # จำนวนครั้งที่ลองใหม่หากล้มเหลว
+      start_period: 60s # << สำคัญมาก: ให้เวลา DB เริ่มต้นก่อนเริ่มเช็ค health
+      interval: 5s # ตรวจสอบทุกๆ 5 วินาที
 
 # Docker Volumes สำหรับเก็บข้อมูลถาวร
 volumes:

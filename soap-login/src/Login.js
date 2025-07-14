@@ -43,6 +43,7 @@ const Login = () => {
           'Content-Type': 'text/xml',
           'SOAPAction': 'uri:checkauthentication',
         },
+        timeout: 10000, // 10 second timeout
       });
 
       // Parse the SOAP response
@@ -55,10 +56,10 @@ const Login = () => {
         // Store the citizenId in localStorage
         localStorage.setItem('citizenId', result);
 
-
         // Second API call to retrieve user info using the citizenId
         const userInfoResponse = await axios.post('/webservice/getinfobycitizenid.php', null, {
           params: { citizenid: result, check: 'check' },
+          timeout: 10000, // 10 second timeout
         });
 
         // Assuming the response is structured as an array of user info
@@ -80,14 +81,30 @@ const Login = () => {
         // Redirect to StartScreen and pass the citizenId and user info as state
         navigate('/startscreen', { state: { citizenId: result, userInfo } });
 
-
-
       } else {
         setError('Login ไม่สำเร็จ กรุณาตรวจสอบ username หรือ password');
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Login failed, please try again.');
+      
+      // More specific error messages
+      if (error.code === 'ECONNABORTED') {
+        setError('การเชื่อมต่อกับเซิร์ฟเวอร์ใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง');
+      } else if (error.response) {
+        // Server responded with error status
+        if (error.response.status === 404) {
+          setError('ไม่พบ SOAP service กรุณาตรวจสอบการตั้งค่าเซิร์ฟเวอร์');
+        } else if (error.response.status === 500) {
+          setError('เกิดข้อผิดพลาดในเซิร์ฟเวอร์ SOAP กรุณาลองใหม่อีกครั้ง');
+        } else {
+          setError(`เกิดข้อผิดพลาดในการเชื่อมต่อ (${error.response.status})`);
+        }
+      } else if (error.request) {
+        // Network error
+        setError('ไม่สามารถเชื่อมต่อกับ SOAP service ได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่าย');
+      } else {
+        setError('Login failed, please try again.');
+      }
     } finally {
       setLoading(false);
     }
