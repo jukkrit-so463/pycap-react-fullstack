@@ -60,11 +60,12 @@ app.post('/saveOrUpdateUser', async (req, res) => {
   const { citizenId, rank, firstName, lastName, personType, roster, department, rosterName, level1Department } = req.body;
 
   try {
+    // แก้ไข: ใส่ Backticks (`) ครอบ 'rank' ทั้งในส่วน INSERT และ ON DUPLICATE KEY UPDATE
     const queryString = `
-      INSERT INTO users (citizenId, rank, firstName, lastName, personType, roster, department, rosterName, level1Department)
+      INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE 
-      rank = VALUES(rank),
+      ON DUPLICATE KEY UPDATE
+      \`rank\` = VALUES(\`rank\`),
       firstName = VALUES(firstName),
       lastName = VALUES(lastName),
       personType = VALUES(personType),
@@ -74,12 +75,14 @@ app.post('/saveOrUpdateUser', async (req, res) => {
       level1Department = VALUES(level1Department);
     `;
 
+    // ตรวจสอบ: Make sure 'query' function is correctly defined and available,
+    // and it handles prepared statements with an array of values.
     await query(queryString, [citizenId, rank, firstName, lastName, personType, roster, department, rosterName, level1Department]);
 
     res.status(200).send({ message: 'User data saved successfully' });
   } catch (error) {
-    console.error('Database error:', error);
-    res.status(500).send({ message: 'Error saving user data' });
+    console.error('Database error:', error); // Log ข้อผิดพลาดของฐานข้อมูล
+    res.status(500).send({ message: 'Error saving user data' }); // ส่งข้อความผิดพลาดกลับไป
   }
 });
 
