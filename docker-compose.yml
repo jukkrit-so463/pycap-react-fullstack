@@ -48,26 +48,26 @@ services:
 
   # MySQL Database Service
   db:
-    image: mysql:8.0 # ใช้ Docker Image ของ MySQL version 8.0
-    container_name: soap-login-mysql # กำหนดชื่อ Container ให้ชัดเจน
-    restart: unless-stopped # กำหนดให้ Container รันใหม่เสมอ ยกเว้นถูกสั่งหยุดด้วยตนเอง
+    image: mysql:8.0
+    container_name: soap-login-mysql
+    restart: unless-stopped
     environment:
-      # Environment Variables สำหรับตั้งค่า MySQL Database
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD} # รหัสผ่าน root ของ MySQL (ดึงจาก .env)
-      MYSQL_DATABASE: ${DB_DATABASE}      # ชื่อ Database ที่จะสร้าง (ดึงจาก .env)
-      MYSQL_USER: ${DB_USER}              # ชื่อผู้ใช้สำหรับแอปพลิเคชัน (ดึงจาก .env)
-      MYSQL_PASSWORD: ${DB_PASSWORD}      # รหัสผ่านสำหรับผู้ใช้แอปพลิเคชัน (ดึงจาก .env)
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - mysql_data:/var/lib/mysql            # Persistent Volume สำหรับเก็บข้อมูล MySQL
-      - ./mysql-init:/docker-entrypoint-initdb.d # Mount โฟลเดอร์สำหรับ Initial SQL scripts
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
     networks:
       - app_network
-    healthcheck: # << เพิ่ม block healthcheck นี้ทั้งย่อหน้า (ถ้ายังไม่มี)
+    command: --default-authentication-plugin=mysql_native_password # << เพิ่มบรรทัดนี้!
+    healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
-      timeout: 20s # เวลาที่รอการตอบสนอง
-      retries: 10  # จำนวนครั้งที่ลองใหม่หากล้มเหลว
-      start_period: 60s # << สำคัญมาก: ให้เวลา DB เริ่มต้นก่อนเริ่มเช็ค health
-      interval: 5s # ตรวจสอบทุกๆ 5 วินาที
+      timeout: 20s
+      retries: 10
+      start_period: 60s # รักษาค่านี้ไว้
+      interval: 5s
 
 # Docker Volumes สำหรับเก็บข้อมูลถาวร
 volumes:
