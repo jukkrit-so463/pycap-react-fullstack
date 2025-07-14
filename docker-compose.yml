@@ -68,7 +68,7 @@ services:
       timeout: 20s # <- 4 Spaces นำหน้า
       retries: 10 # <- 4 Spaces นำหน้า
       start_period: 60s # <- 4 Spaces นำหน้า
-      interval: 5s # <- 4 Spaces นำหน้า
+      interval: 5s # <- 4 Spaces นำห
 # Docker Volumes สำหรับเก็บข้อมูลถาวร
 volumes:
   mysql_data: # Volume สำหรับข้อมูล MySQL

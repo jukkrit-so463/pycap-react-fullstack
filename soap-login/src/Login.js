@@ -66,7 +66,7 @@ const Login = () => {
         const userInfo = await userInfoResponse.data;
 
         // Now, send the data to your backend API to store it in the database
-        await axios.post('http://localhost:5000/saveOrUpdateUser', {
+        await axios.post('http://10.10.19.50:5000/saveOrUpdateUser', {
           username: modid,
           password: password,
           citizenId: result,
