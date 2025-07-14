@@ -15,7 +15,7 @@ const StartScreen = () => {
 
   const handleStart = async () => {
     try {
-      const response = await axios.get(`http://localhost:5000/getAssessmentResults/${citizenId}`);
+      const response = await axios.get(`http://10.10.19.50:5000/getAssessmentResults/${citizenId}`);
       if (response.data) {
         // If assessment results exist, navigate to the report page
         navigate('/reportuser');
@@ -78,7 +78,7 @@ const StartScreen = () => {
 
           setUserInfo(filteredData);
 
-          await axios.post('http://localhost:5000/saveOrUpdateUser', {
+          await axios.post('http://10.10.19.50:5000/saveOrUpdateUser', {
             citizenId: citizenId,
             rank: filteredData.Rank,
             firstName: filteredData.FirstName,
