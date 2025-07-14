@@ -55,6 +55,8 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql            # Persistent Volume สำหรับเก็บข้อมูล MySQL
       - ./mysql-init:/docker-entrypoint-initdb.d # Mount โฟลเดอร์สำหรับ Initial SQL scripts
+    ports:
+      - "3306:3306"
     networks:
       - app_network # เชื่อมต่อกับ Network ที่กำหนดเอง
 
