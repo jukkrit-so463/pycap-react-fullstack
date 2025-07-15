@@ -27,7 +27,7 @@ const Report = () => {
   const fetchReport = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('http://10.10.19.50:5000/report');
+      const response = await axios.get('${process.env.REACT_APP_API_BASE_URL}/report');
       setReportData(response.data);
     } catch (error) {
       console.error('Error fetching report:', error);

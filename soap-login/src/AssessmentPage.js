@@ -223,7 +223,7 @@ const AssessmentPage = ({ citizenId }) => {
         navigate('/');
       } else {
         try {
-          const response = await axios.get(`http://10.10.19.50:5000/getAssessmentResults/${storedCitizenId}`);
+          const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/getAssessmentResults/${storedCitizenId}`);
           if (response.data) {
             // If assessment results exist, navigate to the report page
             navigate('/reportuser');
@@ -294,7 +294,7 @@ const AssessmentPage = ({ citizenId }) => {
     }
   
     try {
-      await axios.post('http://10.10.19.50:5000/saveAssessmentResults', {
+      await axios.post('${process.env.REACT_APP_API_BASE_URL}/saveAssessmentResults', {
         citizenId: citizenIdFromStorage,
         hopeScore,
         selfEfficacyScore,

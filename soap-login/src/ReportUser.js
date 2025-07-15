@@ -28,7 +28,7 @@ const ReportUser = () => {
 
     const fetchAssessmentResults = async () => {
       try {
-        const response = await axios.get(`http://10.10.19.50:5000/getAssessmentResults/${citizenId}`);
+        const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/getAssessmentResults/${citizenId}`);
         if (response.data) {
           setAssessmentResults(response.data);
         } else {
