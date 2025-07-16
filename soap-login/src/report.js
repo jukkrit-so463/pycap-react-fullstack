@@ -8,26 +8,23 @@ const Report = () => {
   const navigate = useNavigate(); // Initialize navigate
 
   // ฟังก์ชันสำหรับการออกจากระบบ
-  const handleLogout = () => {
-    // ลบ citizenId ออกจาก localStorage
-    localStorage.removeItem('citizenId');
-    // นำทางผู้ใช้กลับไปยังหน้าเริ่มต้นหรือหน้าล็อกอิน
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/logout`);
+      navigate('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   useEffect(() => {
-    const storedCitizenId = localStorage.getItem('citizenId');
-    if (!storedCitizenId) {
-      navigate('/');
-    } else {
-      fetchReport(); // Fetch report data if the user is authenticated
-    }
+    fetchReport();
   }, [navigate]);
 
   const fetchReport = async () => {
     setLoading(true);
     try {
-      const response = await axios.get('${process.env.REACT_APP_API_BASE_URL}/report');
+      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/report`);
       setReportData(response.data);
     } catch (error) {
       console.error('Error fetching report:', error);

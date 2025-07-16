@@ -216,26 +216,17 @@ const AssessmentPage = ({ citizenId }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkCitizenIdAndResults = async () => {
-      const storedCitizenId = localStorage.getItem('citizenId');
-      if (!storedCitizenId) {
-        // Navigate to the home page if citizenId is not found
-        navigate('/');
-      } else {
-        try {
-          const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/getAssessmentResults/${storedCitizenId}`);
-          if (response.data) {
-            // If assessment results exist, navigate to the report page
-            navigate('/reportuser');
-          }
-        } catch (error) {
-          console.error('Error fetching assessment results:', error);
-          // You might want to handle errors here, like navigating to an error page
+    const checkResults = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/getAssessmentResults/self`);
+        if (response.data) {
+          navigate('/reportuser');
         }
+      } catch (error) {
+        // ถ้า 404 ให้ทำแบบประเมินต่อ
       }
     };
-
-    checkCitizenIdAndResults();
+    checkResults();
   }, [navigate]);
 
   const handleOptionClick = (index) => {
@@ -287,15 +278,8 @@ const AssessmentPage = ({ citizenId }) => {
 
   // Function to handle the save button click
   const handleSaveClick = async () => {
-    const citizenIdFromStorage = localStorage.getItem('citizenId') || citizenId;
-    if (!citizenIdFromStorage) {
-      console.error('Citizen ID is not available');
-      return;
-    }
-  
     try {
-      await axios.post('${process.env.REACT_APP_API_BASE_URL}/saveAssessmentResults', {
-        citizenId: citizenIdFromStorage,
+      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/saveAssessmentResults`, {
         hopeScore,
         selfEfficacyScore,
         resilienceScore,
@@ -306,7 +290,7 @@ const AssessmentPage = ({ citizenId }) => {
         optimismAverage,
         overallAverage,
       });
-      setIsSaved(true); // Set the isSaved state to true
+      setIsSaved(true);
       console.log('Assessment results saved successfully');
     } catch (error) {
       console.error('Error saving assessment results:', error);
@@ -321,9 +305,13 @@ const AssessmentPage = ({ citizenId }) => {
     setIsSaved(false);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('citizenId');
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/logout`);
+      navigate('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
 

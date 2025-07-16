@@ -1,107 +1,74 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom'; // useLocation ไม่ได้ใช้ในโค้ดนี้ แต่ถ้าจำเป็นก็เก็บไว้
 import { Container, Row, Col, Button } from 'react-bootstrap';
-import { useNavigate } from 'react-router-dom';
 
+// ตั้งค่า axios default for credentials ที่นี่ (หรือที่ไฟล์หลักอย่าง index.js)
+// เพื่อให้ทุก request ส่ง cookie ไปด้วย
+axios.defaults.withCredentials = true;
 
 const StartScreen = () => {
-  const navigate = useNavigate(); // Initialize useNavigate
+  const navigate = useNavigate();
+  // const location = useLocation(); // ไม่ได้ใช้ในโค้ดนี้, สามารถลบได้ถ้าไม่จำเป็น
   const [userInfo, setUserInfo] = useState(null);
   const [error, setError] = useState(null);
 
-  // ดึง citizenId จาก localStorage
-  const citizenId = localStorage.getItem('citizenId');
+  // เราจะไม่ดึง citizenId จาก localStorage อีกต่อไป
+  // ข้อมูลผู้ใช้จะถูกส่งมาจาก backend หลังจากตรวจสอบ JWT แล้ว
 
   const handleStart = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/getAssessmentResults/${citizenId}`);
+      // เรียก API ของ Backend เพื่อตรวจสอบผลการประเมิน
+      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/getAssessmentResults/self`);
       if (response.data) {
-        // If assessment results exist, navigate to the report page
         navigate('/reportuser');
       } else {
-        // If no results, navigate to the assessment page
         navigate('/assessment');
       }
     } catch (error) {
       console.error('Error fetching assessment results:', error);
-      setError('Failed to fetch assessment results.');
-      // In case of error, redirect to assessment page
-      navigate('/assessment');
+      if (error.response && error.response.status === 404) {
+        navigate('/assessment');
+      } else {
+        setError('Failed to fetch assessment results. Please try again.');
+        navigate('/assessment');
+      }
     }
   };
 
   // ฟังก์ชันสำหรับการออกจากระบบ
-  const handleLogout = () => {
-    // ลบ citizenId ออกจาก localStorage
-    localStorage.removeItem('citizenId');
-    // นำทางผู้ใช้กลับไปยังหน้าเริ่มต้นหรือหน้าล็อกอิน
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/logout`);
+      navigate('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+      setError('Failed to log out. Please try again.');
+    }
   };
 
-
   useEffect(() => {
-    const fetchData = async () => {
-      if (!citizenId) {
-        setError('No citizen ID provided.');
-        return;
-      }
-
+    const fetchUserInfo = async () => {
       try {
-        const response = await axios.post('/webservice/testgetinfobycitizenid.php', null, {
-          params: { citizenid: citizenId, check: 'check' },
-          headers: { Accept: '*/*' },
-        });
-
-        const arrayDataMatch = response.data.match(/Array\s*\(([^)]+)\)/);
-        if (arrayDataMatch) {
-          const arrayData = arrayDataMatch[1]
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.includes('=>'))
-            .reduce((acc, line) => {
-              const [key, value] = line.split('=>').map(item => item.trim());
-              acc[key.replace(/[\[\]]/g, '')] = value;
-              return acc;
-            }, {});
-
-          const filteredData = {
-            Rank: arrayData['Rank'],
-            FirstName: arrayData['FirstName'],
-            LastName: arrayData['LastName'],
-            PersonType: arrayData['PersonType'],
-            Roster: arrayData['Roster'],
-            Department: arrayData['Department'],
-            RosterName: arrayData['RosterName'],
-            Level1Department: arrayData['Level1Department'],
-          };
-
-          setUserInfo(filteredData);
-
-          await axios.post('${process.env.REACT_APP_API_BASE_URL}/saveOrUpdateUser', {
-            citizenId: citizenId,
-            rank: filteredData.Rank,
-            firstName: filteredData.FirstName,
-            lastName: filteredData.LastName,
-            personType: filteredData.PersonType,
-            roster: filteredData.Roster,
-            department: filteredData.Department,
-            rosterName: filteredData.RosterName,
-            level1Department: filteredData.Level1Department,
-          });
-        } else {
-          setError('Unable to parse array data.');
-        }
+        // เรียก Endpoint ใหม่ใน Backend เพื่อดึงข้อมูลผู้ใช้
+        // Backend จะดึง citizenId จาก JWT และใช้มันเพื่อดึงข้อมูลจาก SOAP service
+        // (หรือจาก DB ของเราเอง ถ้าเราเก็บข้อมูลเต็มไว้แล้ว)
+        // ตั้งค่า proxy ใน Nginx ให้ /api ชี้ไปที่ Backend
+        const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/user-profile`);
+        setUserInfo(response.data.userInfo); // Backend ควรส่ง userInfo กลับมาใน response.data.userInfo
       } catch (error) {
-        console.error('Data fetch error:', error);
-        setError('Failed to fetch data.');
+        console.error('Failed to fetch user info:', error);
+        setError('Failed to load user information.');
+        // หากเกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้ (เช่น JWT หมดอายุหรือไม่ถูกต้อง)
+        // อาจจะต้อง Redirect ไปหน้า Login
+        if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+          navigate('/login'); // หรือ '/' ถ้าหน้า login เป็น root
+        }
       }
     };
 
-    fetchData();
-  }, [citizenId]);
-
-
+    fetchUserInfo();
+  }, [navigate]); // เพิ่ม navigate เป็น dependency เพื่อหลีกเลี่ยง warning
 
   return (
     <Container className="mt-5">
@@ -161,18 +128,13 @@ const StartScreen = () => {
           </Col>
         </Row>
 
-        {/* Existing content */}
         <Button variant="success" size="lg" onClick={handleStart}>
           <h5>เข้าสู่การทำแบบประเมิน</h5>
         </Button>
-        {/* Existing content */}
         {' '}
-        {/* Existing content */}
-        <Button variant="danger" size="lg" onClick={handleLogout }>
+        <Button variant="danger" size="lg" onClick={handleLogout}>
           <h5>ออกจากระบบ</h5>
         </Button>
-        {/* Existing content */}
-
 
         <p className="mt-3" style={{ color: 'red' }}>
           เมื่อคุณ เข้าสู่การทำแบบประเมิน หมายถึงคุณตกลงตาม{' '}
