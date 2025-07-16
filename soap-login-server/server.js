@@ -125,7 +125,7 @@ app.post('/login', async (req, res) => {
         const axios = require('axios'); // ต้องมั่นใจว่า axios ถูก require ไว้ด้วย
         const xml2js = require('xml2js'); // ต้องมั่นใจว่า xml2js ถูก require ไว้ด้วย
 
-        const response = await axios.post('http://localhost/webservice/checkauthentication.php', soapRequest, { // **สำคัญ: เปลี่ยน URL SOAP service ให้ถูกต้อง**
+        const response = await axios.post('http://frontend/webservice/checkauthentication.php', soapRequest, { // **สำคัญ: เปลี่ยน URL SOAP service ให้ถูกต้อง**
             headers: {
                 'Content-Type': 'text/xml',
                 'SOAPAction': 'uri:checkauthentication',
@@ -142,7 +142,7 @@ app.post('/login', async (req, res) => {
 
         if (citizenId && /^\d{13}$/.test(citizenId)) {
             // Login successful with SOAP, now get user info from SOAP service
-            const userInfoResponse = await axios.post('http://localhost/webservice/getinfobycitizenid.php', null, { // **สำคัญ: เปลี่ยน URL SOAP service ให้ถูกต้อง**
+            const userInfoResponse = await axios.post('http://frontend/webservice/getinfobycitizenid.php', null, { // **สำคัญ: เปลี่ยน URL SOAP service ให้ถูกต้อง**
                 params: { citizenid: citizenId, check: 'check' },
                 timeout: 10000,
             });
