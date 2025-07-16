@@ -4,10 +4,9 @@ import React, { createContext, useState } from 'react';
 export const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
-  const [citizenId, setCitizenId] = useState(null);
-
+  // ลบ citizenId state เพราะไม่ใช้แล้ว
   return (
-    <UserContext.Provider value={{ citizenId, setCitizenId }}>
+    <UserContext.Provider value={{}}>
       {children}
     </UserContext.Provider>
   );

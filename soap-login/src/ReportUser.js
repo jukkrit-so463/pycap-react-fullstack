@@ -12,23 +12,19 @@ const ReportUser = () => {
 
 
   // ฟังก์ชันสำหรับการออกจากระบบ
-  const handleLogout = () => {
-    // ลบ token หรือ citizenId ออกจาก localStorage
-    localStorage.removeItem('citizenId');
-    // นำทางผู้ใช้กลับไปยังหน้าเริ่มต้นหรือหน้าล็อกอิน
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/logout`);
+      navigate('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   useEffect(() => {
-    const citizenId = localStorage.getItem('citizenId'); // ดึง citizenId จาก localStorage
-    if (!citizenId) {
-      navigate('/');
-      return;
-    }
-
     const fetchAssessmentResults = async () => {
       try {
-        const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/getAssessmentResults/${citizenId}`);
+        const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/getAssessmentResults/self`);
         if (response.data) {
           setAssessmentResults(response.data);
         } else {
