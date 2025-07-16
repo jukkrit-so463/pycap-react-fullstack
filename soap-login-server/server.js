@@ -381,11 +381,10 @@ app.get('/user-profile', authenticateToken, async (req, res) => {
       // ตัวอย่างการเรียก SOAP service อีกครั้งเพื่อดึงข้อมูลเต็ม
       const axios = require('axios');
       const xml2js = require('xml2js');
-      const soapServiceBaseUrl = process.env.SOAP_SERVICE_URL || 'http://host.docker.internal'; // ควรดึงจาก env
-
-      const userInfoResponse = await axios.post(`${soapServiceBaseUrl}/webservice/testgetinfobycitizenid.php`, null, {
-          params: { citizenid: citizenId, check: 'check' },
-          headers: { Accept: '*/*' },
+      
+      const userInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
+        params: { citizenid: citizenId, check: 'check' },
+        headers: { Accept: '*/*' },
       });
 
       // Parse SOAP response (เหมือนใน Login endpoint)
