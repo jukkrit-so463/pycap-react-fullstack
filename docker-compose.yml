@@ -16,7 +16,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}  # ดึงค่าจากไฟล์ .env
       MYSQL_DATABASE: ${DB_DATABASE}  # ดึงค่าจากไฟล์ .env
       JWT_SECRET: ${JWT_SECRET}       # ดึงค่าจากไฟล์ .env
-      NODE_ENV: production            # ตั้งค่าเป็น production เพื่อประสิทธิภาพและความปลอดภัย
+      NODE_ENV: development            # ตั้งค่าเป็น production เพื่อประสิทธิภาพและความปลอดภัย
     depends_on:
       db:
         condition: service_healthy
