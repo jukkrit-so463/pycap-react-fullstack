@@ -14,7 +14,7 @@ const ReportUser = () => {
   // ฟังก์ชันสำหรับการออกจากระบบ
   const handleLogout = async () => {
     try {
-      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/logout`);
+      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/logout`);
       navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
@@ -24,7 +24,7 @@ const ReportUser = () => {
   useEffect(() => {
     const fetchAssessmentResults = async () => {
       try {
-        const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/getAssessmentResults/self`);
+        const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/getAssessmentResults/self`);
         if (response.data) {
           setAssessmentResults(response.data);
         } else {

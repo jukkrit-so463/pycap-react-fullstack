@@ -19,7 +19,7 @@ const StartScreen = () => {
   const handleStart = async () => {
     try {
       // เรียก API ของ Backend เพื่อตรวจสอบผลการประเมิน
-      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/getAssessmentResults/self`);
+      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/getAssessmentResults/self`);
       if (response.data) {
         navigate('/reportuser');
       } else {
@@ -39,7 +39,7 @@ const StartScreen = () => {
   // ฟังก์ชันสำหรับการออกจากระบบ
   const handleLogout = async () => {
     try {
-      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/logout`);
+      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/logout`);
       navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
@@ -54,7 +54,7 @@ const StartScreen = () => {
         // Backend จะดึง citizenId จาก JWT และใช้มันเพื่อดึงข้อมูลจาก SOAP service
         // (หรือจาก DB ของเราเอง ถ้าเราเก็บข้อมูลเต็มไว้แล้ว)
         // ตั้งค่า proxy ใน Nginx ให้ /api ชี้ไปที่ Backend
-        const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/user-profile`);
+        const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/user-profile`);
         setUserInfo(response.data.userInfo); // Backend ควรส่ง userInfo กลับมาใน response.data.userInfo
       } catch (error) {
         console.error('Failed to fetch user info:', error);

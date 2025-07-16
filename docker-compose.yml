@@ -35,7 +35,7 @@ services:
     environment:
       # สำหรับ React (Create React App) ที่ต้องทราบ URL ของ Backend API
       # เนื่องจากจะใช้ Nginx Reverse Proxy, Frontend จะเรียก API ผ่าน path /api
-      REACT_APP_BACKEND_URL: /api
+      REACT_APP_API_BASE_URL: /api
       # SOAP service configuration
       REACT_APP_SOAP_SERVICE_URL: http://10.106.0.210
     extra_hosts:

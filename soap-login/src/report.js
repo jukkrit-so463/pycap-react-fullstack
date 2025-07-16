@@ -10,7 +10,7 @@ const Report = () => {
   // ฟังก์ชันสำหรับการออกจากระบบ
   const handleLogout = async () => {
     try {
-      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/logout`);
+      await axios.post(`${process.env.REACT_APP_API_BASE_URL}/logout`);
       navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
@@ -24,7 +24,7 @@ const Report = () => {
   const fetchReport = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/report`);
+      const response = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/report`);
       setReportData(response.data);
     } catch (error) {
       console.error('Error fetching report:', error);

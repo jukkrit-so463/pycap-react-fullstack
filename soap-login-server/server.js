@@ -366,7 +366,7 @@ app.get('/getAssessmentResults/:citizenId', authenticateToken, async (req, res) 
    }
 });
 
-app.get('/api/user-profile', authenticateToken, async (req, res) => {
+app.get('/user-profile', authenticateToken, async (req, res) => {
   // ข้อมูลผู้ใช้ (citizenId, firstName, etc.) ถูกเก็บไว้ใน req.user โดย authenticateToken middleware
   const { citizenId, modid, firstName, lastName, rank, level1Department } = req.user;
 
@@ -435,7 +435,7 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
 
 
 // ปรับแก้ Route /getAssessmentResults/:citizenId
-app.get('/api/getAssessmentResults/:citizenId', authenticateToken, async (req, res) => {
+app.get('/getAssessmentResults/:citizenId', authenticateToken, async (req, res) => {
  const requestedCitizenId = req.params.citizenId;
  const citizenIdFromToken = req.user.citizenId;
 
