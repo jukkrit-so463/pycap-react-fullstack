@@ -20,8 +20,11 @@ app.use((req, res, next) => {
 });
 
 // --- CORS Configuration ---
+// กำหนด Origin ตาม Environment (Development vs Production)
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' ? 'https://psycap.nmd.go.th' : 'http://localhost:3000',
+    origin: process.env.NODE_ENV === 'production' 
+        ? 'https://psycap.nmd.go.th' 
+        : 'http://localhost:3000',
     methods: ['GET', 'POST'],
     credentials: true
 }));
@@ -32,6 +35,7 @@ app.use(cookieParser());
 // --- MySQL Connection ---
 let db;
 let databaseConnected = false;
+
 function connectDB() {
     db = mysql.createConnection({
         host: process.env.MYSQL_HOST,
@@ -70,26 +74,28 @@ app.use((req, res, next) => {
     next();
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default_secret_key';
+const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_please_change_in_production_env';
 
 // --- XML Parser Configuration (ใช้ร่วมกัน) ---
 const xmlParser = new xml2js.Parser({
     explicitArray: false,
     tagNameProcessors: [xml2js.processors.stripPrefix],
-    ignoreAttrs: true, // แก้ปัญหา Unquoted attribute value
-    emptyTag: null,
+    ignoreAttrs: true, // แก้ปัญหา "Unquoted attribute value"
 });
 
 // --- Middleware สำหรับตรวจสอบ JWT ---
 const authenticateToken = (req, res, next) => {
     const token = req.cookies.jwt_token;
-    if (!token) return res.status(401).json({ message: 'Access Denied: No Token Provided.' });
+    if (!token) {
+        return res.status(401).json({ message: 'Access Denied: No Token Provided.' });
+    }
 
     try {
         const verified = jwt.verify(token, JWT_SECRET);
         req.user = verified;
         next();
     } catch (err) {
+        console.error('JWT Verification Error:', err.message);
         res.clearCookie('jwt_token');
         return res.status(403).json({ message: 'Invalid or expired token.' });
     }
@@ -99,7 +105,9 @@ const authenticateToken = (req, res, next) => {
 
 app.post('/api/login', async (req, res) => {
     const { modid, password } = req.body;
-    if (!modid || !password) return res.status(400).json({ message: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
+    if (!modid || !password) {
+        return res.status(400).json({ message: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
+    }
 
     const soapRequest = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="uri:checkauthentication"><soapenv:Header/><soapenv:Body><urn:checkauthentication><modid>${modid}</modid><password>${password}</password></urn:checkauthentication></soapenv:Body></soapenv:Envelope>`;
 
@@ -113,23 +121,7 @@ app.post('/api/login', async (req, res) => {
         const citizenId = authResult.Envelope.Body.checkauthenticationResponse.return;
 
         if (citizenId && /^\d{13}$/.test(citizenId)) {
-            const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
-                params: { citizenid: citizenId, check: 'check' },
-                timeout: 30000
-            });
-
-            const infoResult = await xmlParser.parseStringPromise(soapInfoResponse.data);
-            const userInfo = infoResult.Envelope.Body.getinfobycitizenidResponse.return;
-
-            const userPayload = {
-                citizenId: citizenId,
-                modid: modid,
-                firstName: userInfo.FirstName,
-                lastName: userInfo.LastName,
-                rank: userInfo.Rank,
-                level1Department: userInfo.Level1Department,
-            };
-
+            const userPayload = { citizenId: citizenId, modid: modid };
             const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '1h' });
 
             res.cookie('jwt_token', token, {
@@ -146,13 +138,19 @@ app.post('/api/login', async (req, res) => {
     } catch (error) {
         console.error('Login Error:', error.message);
         let errorMessage = 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง';
-        if (error.code === 'ECONNABORTED') errorMessage = 'การเชื่อมต่อกับบริการยืนยันตัวตนใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง';
+        if (error.code === 'ECONNABORTED') {
+            errorMessage = 'การเชื่อมต่อกับบริการยืนยันตัวตนใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง';
+        }
         res.status(500).json({ message: errorMessage });
     }
 });
 
 app.post('/api/logout', (req, res) => {
-    res.clearCookie('jwt_token');
+    res.clearCookie('jwt_token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'Lax',
+    });
     res.status(200).json({ message: 'Logged out successfully.' });
 });
 
@@ -173,6 +171,7 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
             const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = userInfo;
             const insertQuery = `INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE \`rank\` = VALUES(\`rank\`), firstName = VALUES(firstName), lastName = VALUES(lastName), personType = VALUES(personType), roster = VALUES(roster), department = VALUES(department), rosterName = VALUES(rosterName), level1Department = VALUES(level1Department);`;
             await exports.query(insertQuery, [citizenId, Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department]);
+            
             console.log(`User data for ${citizenId} saved/updated.`);
             res.status(200).json({ message: 'User profile fetched successfully!', userInfo });
         } else {
@@ -184,228 +183,45 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
     }
 });
 
-// --- Protected Routes (ใช้ authenticateToken Middleware) ---
-// Route to save or update user data
-// ตรวจสอบว่ามี JWT ก่อนเข้าถึง
-app.post('/api/saveOrUpdateUser', authenticateToken, async (req, res) => {
-    // ดึง citizenId จาก JWT payload แทนที่จะรับจาก req.body โดยตรง
-    const citizenIdFromToken = req.user.citizenId;
-    const { rank, firstName, lastName, personType, roster, department, rosterName, level1Department } = req.body;
-
-    // ใช้ citizenId จาก Token ในการอัปเดตข้อมูลเสมอ เพื่อป้องกันการแก้ไขข้อมูลผู้ใช้คนอื่น
-    const citizenId = citizenIdFromToken;
-
-    if (!citizenId || !firstName || !lastName || !rank || !level1Department) {
-        return res.status(400).send({ message: 'Missing required user information.' });
-    }
-
-    try {
-        const queryString = `
-            INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-            \`rank\` = VALUES(\`rank\`),
-            firstName = VALUES(firstName),
-            lastName = VALUES(lastName),
-            personType = VALUES(personType),
-            roster = VALUES(roster),
-            department = VALUES(department),
-            rosterName = VALUES(rosterName),
-            level1Department = VALUES(level1Department);
-        `;
-        await exports.query(queryString, [citizenId, rank, firstName, lastName, personType, roster, department, rosterName, level1Department]);
-        res.status(200).send({ message: 'User data saved successfully' });
-    } catch (error) {
-        console.error('Database error in /saveOrUpdateUser:', error);
-        res.status(500).send({ message: 'Error saving user data. Please try again later.' });
-    }
-});
-
-// Route to save or update assessment results
 app.post('/api/saveAssessmentResults', authenticateToken, async (req, res) => {
-    const citizenIdFromToken = req.user.citizenId; // ใช้ citizenId จาก Token
-    const {
-        hopeScore,
-        selfEfficacyScore,
-        resilienceScore,
-        optimismScore,
-        hopeAverage,
-        selfEfficacyAverage,
-        resilienceAverage,
-        optimismAverage,
-        overallAverage,
-    } = req.body;
-
-    const citizenId = citizenIdFromToken; // ใช้ citizenId จาก Token
-
-    if (!citizenId) { // This check might be redundant if token verification ensures citizenId
-      return res.status(400).send({ message: 'Citizen ID is required from token.' });
-    }
-
-    const numericFields = { hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage };
-    for (const key in numericFields) {
-        const value = numericFields[key];
-        if (typeof value === 'undefined' || value === null || isNaN(Number(value))) {
-            return res.status(400).send({ message: `Invalid or missing data for ${key}. Please provide a numeric value.` });
-        }
-    }
+    const { citizenId } = req.user;
+    const { hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage } = req.body;
 
     try {
-        const queryString = `
-            INSERT INTO assessment_results
-                (citizenId, hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                hopeScore = VALUES(hopeScore),
-                selfEfficacyScore = VALUES(selfEfficacyScore),
-                resilienceScore = VALUES(resilienceScore),
-                optimismScore = VALUES(optimismScore),
-                hopeAverage = VALUES(hopeAverage),
-                selfEfficacyAverage = VALUES(selfEfficacyAverage),
-                resilienceAverage = VALUES(resilienceAverage),
-                optimismAverage = VALUES(optimismAverage),
-                overallAverage = VALUES(overallAverage);
-        `;
-        await exports.query(queryString, [
-            citizenId, hopeScore, selfEfficacyScore, resilienceScore, optimismScore,
-            hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage,
-        ]);
-        res.status(200).send({ message: 'Assessment results saved successfully' });
+        const queryString = `INSERT INTO assessment_results (citizenId, hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE hopeScore = VALUES(hopeScore), selfEfficacyScore = VALUES(selfEfficacyScore), resilienceScore = VALUES(resilienceScore), optimismScore = VALUES(optimismScore), hopeAverage = VALUES(hopeAverage), selfEfficacyAverage = VALUES(selfEfficacyAverage), resilienceAverage = VALUES(resilienceAverage), optimismAverage = VALUES(optimismAverage), overallAverage = VALUES(overallAverage);`;
+        await exports.query(queryString, [citizenId, hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage]);
+        res.status(200).json({ message: 'Assessment results saved successfully' });
     } catch (error) {
         console.error('Database error in /saveAssessmentResults:', error);
-        res.status(500).send({ message: 'Error saving assessment results. Please try again later.' });
+        res.status(500).json({ message: 'Error saving assessment results.' });
     }
 });
 
-// Route to generate report
-app.get('/api/report', authenticateToken, async (req, res) => {
-   const criteria = { hope: 33, selfEfficacy: 41, resilience: 41, optimism: 33 };
-   try {
-     const queryString = `
-       SELECT
-         u.level1Department,
-         COUNT(*) AS totalAssessors,
-         (SUM(CASE WHEN a.hopeScore >= ? THEN 1 ELSE 0 END) / COUNT(*)) * 100 AS hopePassPercentage,
-         (SUM(CASE WHEN a.selfEfficacyScore >= ? THEN 1 ELSE 0 END) / COUNT(*)) * 100 AS selfEfficacyPassPercentage,
-         (SUM(CASE WHEN a.resilienceScore >= ? THEN 1 ELSE 0 END) / COUNT(*)) * 100 AS resiliencePassPercentage,
-         (SUM(CASE WHEN a.optimismScore >= ? THEN 1 ELSE 0 END) / COUNT(*)) * 100 AS optimismPassPercentage
-       FROM assessment_results a
-       JOIN users u ON a.citizenId = u.citizenId
-       GROUP BY u.level1Department
-     `;
-     const results = await exports.query(queryString, [
-       criteria.hope, criteria.selfEfficacy, criteria.resilience, criteria.optimism
-     ]);
-     res.status(200).json(results);
-   } catch (error) {
-     console.error('Database error in /report:', error);
-     res.status(500).send({ message: 'Error generating report. Please try again later.', error: error.message });
-   }
-});
-
-app.get('/api/getAssessmentResults/:citizenId', authenticateToken, async (req, res) => {
-   // ตรวจสอบว่า citizenId ที่ร้องขอตรงกับ citizenId ใน Token หรือไม่ (ป้องกันการดึงข้อมูลของคนอื่น)
-   const requestedCitizenId = req.params.citizenId;
-   const citizenIdFromToken = req.user.citizenId;
-
-   if (requestedCitizenId !== citizenIdFromToken) {
-       return res.status(403).json({ message: 'Forbidden: You can only view your own assessment results.' });
-   }
-
-   if (!requestedCitizenId || !/^\d{13}$/.test(requestedCitizenId)) {
-     return res.status(400).json({ message: 'Invalid Citizen ID format.' });
-   }
-
-   try {
-     const results = await exports.query(
-       `SELECT hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage
-        FROM assessment_results
-        WHERE citizenId = ?`,
-       [requestedCitizenId]
-     );
-     if (results.length > 0) {
-       res.json(results[0]);
-     } else {
-       res.status(404).json({ message: 'No assessment results found for this citizen ID.' });
-     }
-   } catch (error) {
-     console.error('Error fetching assessment results:', error);
-     res.status(500).json({ error: 'Error fetching assessment results. Please try again later.' });
-   }
-});
-
-app.get('/api/user-profile', authenticateToken, async (req, res) => {
+app.get('/api/getAssessmentResults/self', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
 
-    if (!citizenId) {
-        return res.status(400).json({ message: 'Citizen ID not found in token.' });
-    }
-
     try {
-        // เรียก SOAP service เพื่อดึงข้อมูลผู้ใช้
-        const axios = require('axios');
-        const xml2js = require('xml2js');
-
-        const userInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
-            params: { citizenid: citizenId, check: 'check' }
-        });
-
-        // --- ใช้ xml2js ในการ Parse ข้อมูล ---
-        const parser = new xml2js.Parser({ 
-            explicitArray: false, 
-            tagNameProcessors: [xml2js.processors.stripPrefix],
-            ignoreAttrs: true // เพิ่ม option นี้เข้าไป
-        });
-        const result = await parser.parseStringPromise(userInfoResponse.data);
-
-        // ตรวจสอบโครงสร้างของ XML ที่ได้รับกลับมา (อาจต้องปรับตาม Response จริง)
-        const userInfoResult = result['SOAP-ENV:Envelope']['SOAP-ENV:Body']['ns1:getinfobycitizenidResponse']['return'];
-
-        let fullUserInfo = {};
-        // ตรวจสอบว่าได้ข้อมูลกลับมาจริง
-        if (userInfoResult && typeof userInfoResult === 'object') {
-             fullUserInfo = {
-                Rank: userInfoResult.Rank,
-                FirstName: userInfoResult.FirstName,
-                LastName: userInfoResult.LastName,
-                PersonType: userInfoResult.PersonType,
-                Roster: userInfoResult.Roster,
-                Department: userInfoResult.Department,
-                RosterName: userInfoResult.RosterName,
-                Level1Department: userInfoResult.Level1Department,
-            };
-
-            // --- บันทึกข้อมูลลง Database ---
-            const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = fullUserInfo;
-            const queryString = `
-                INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE
-                \`rank\` = VALUES(\`rank\`),
-                firstName = VALUES(firstName),
-                lastName = VALUES(lastName),
-                personType = VALUES(personType),
-                roster = VALUES(roster),
-                department = VALUES(department),
-                rosterName = VALUES(rosterName),
-                level1Department = VALUES(level1Department);
-            `;
-            await exports.query(queryString, [citizenId, Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department]);
-            console.log(`User data for ${citizenId} saved to database.`);
-
+        const results = await exports.query('SELECT * FROM assessment_results WHERE citizenId = ?', [citizenId]);
+        if (results.length > 0) {
+            res.json(results[0]);
         } else {
-             console.warn('Could not parse user info from SOAP response for citizenId:', citizenId);
+            res.status(404).json({ message: 'No assessment results found.' });
         }
-
-        // ส่งข้อมูลผู้ใช้กลับไปให้ Frontend
-        res.status(200).json({
-            message: 'User profile fetched successfully!',
-            userInfo: fullUserInfo
-        });
-
     } catch (error) {
-        console.error('Error in /api/user-profile route:', error);
-        res.status(500).json({ message: 'Failed to fetch or process user profile details.' });
+        console.error('Error fetching assessment results:', error);
+        res.status(500).json({ error: 'Error fetching assessment results.' });
+    }
+});
+
+app.get('/api/report', authenticateToken, async (req, res) => {
+    const criteria = { hope: 33, selfEfficacy: 41, resilience: 41, optimism: 33 };
+    try {
+        const queryString = `SELECT u.level1Department, COUNT(*) AS totalAssessors, (SUM(CASE WHEN a.hopeScore >= ? THEN 1 ELSE 0 END) / COUNT(*)) * 100 AS hopePassPercentage, (SUM(CASE WHEN a.selfEfficacyScore >= ? THEN 1 ELSE 0 END) / COUNT(*)) * 100 AS selfEfficacyPassPercentage, (SUM(CASE WHEN a.resilienceScore >= ? THEN 1 ELSE 0 END) / COUNT(*)) * 100 AS resiliencePassPercentage, (SUM(CASE WHEN a.optimismScore >= ? THEN 1 ELSE 0 END) / COUNT(*)) * 100 AS optimismPassPercentage FROM assessment_results a JOIN users u ON a.citizenId = u.citizenId GROUP BY u.level1Department`;
+        const results = await exports.query(queryString, [criteria.hope, criteria.selfEfficacy, criteria.resilience, criteria.optimism]);
+        res.status(200).json(results);
+    } catch (error) {
+        console.error('Database error in /report:', error);
+        res.status(500).json({ message: 'Error generating report.' });
     }
 });
 
