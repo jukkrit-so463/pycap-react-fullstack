@@ -374,25 +374,25 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
     }
 
     try {
-        // เรียก SOAP service เพื่อดึงข้อมูลผู้ใช้
         const axios = require('axios');
         const xml2js = require('xml2js');
 
-        const userInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
+        // เรียก SOAP service เพื่อดึงข้อมูลผู้ใช้
+        const soapResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
             params: { citizenid: citizenId, check: 'check' }
         });
 
         // --- ใช้ xml2js ในการ Parse ข้อมูล ---
-        const parser = new xml2js.Parser({ explicitArray: false, ignoreAttrs: true });
-        const result = await parser.parseStringPromise(userInfoResponse.data);
+        const parser = new xml2js.Parser({ explicitArray: false, tagNameProcessors: [xml2js.processors.stripPrefix] });
+        const result = await parser.parseStringPromise(soapResponse.data);
 
-        // ตรวจสอบโครงสร้างของ XML ที่ได้รับกลับมา (อาจต้องปรับตาม Response จริง)
-        const userInfoResult = result['SOAP-ENV:Envelope']['SOAP-ENV:Body']['ns1:getinfobycitizenidResponse']['return'];
+        // เข้าถึงข้อมูล user info จาก XML ที่แปลงแล้ว
+        // โดยทั่วไปข้อมูลจะอยู่ใน Body -> ชื่อ Response -> return
+        const userInfoResult = result.Envelope.Body.getinfobycitizenidResponse.return;
 
         let fullUserInfo = {};
-        // ตรวจสอบว่าได้ข้อมูลกลับมาจริง
         if (userInfoResult && typeof userInfoResult === 'object') {
-             fullUserInfo = {
+            fullUserInfo = {
                 Rank: userInfoResult.Rank,
                 FirstName: userInfoResult.FirstName,
                 LastName: userInfoResult.LastName,
@@ -419,13 +419,12 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
                 level1Department = VALUES(level1Department);
             `;
             await exports.query(queryString, [citizenId, Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department]);
-            console.log(`User data for ${citizenId} saved to database.`);
+            console.log(`User data for ${citizenId} has been saved or updated in the database.`);
 
         } else {
-             console.warn('Could not parse user info from SOAP response for citizenId:', citizenId);
+             console.warn('Could not parse user info from SOAP response for citizenId:', citizenId, 'Response was:', userInfoResult);
         }
 
-        // ส่งข้อมูลผู้ใช้กลับไปให้ Frontend
         res.status(200).json({
             message: 'User profile fetched successfully!',
             userInfo: fullUserInfo
