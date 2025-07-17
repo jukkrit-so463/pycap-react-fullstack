@@ -21,7 +21,7 @@ app.use((req, res, next) => {
 // --- CORS Configuration ---
 // Allow credentials for HttpOnly cookies. Specify exact origin in production.
 app.use(cors({
-    origin: 'http://localhost:3000', // **สำคัญมาก: เปลี่ยนเป็นโดเมน Frontend ของคุณใน Production**
+    origin: 'https://psycap.nmd.go.th', // **สำคัญมาก: เปลี่ยนเป็นโดเมน Frontend ของคุณใน Production**
     methods: ['GET', 'POST'],
     credentials: true // อนุญาตให้ส่ง Cookie ข้าม Origin ได้
 }));
@@ -100,7 +100,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // --- New Login Endpoint ---
-app.post('/login', async (req, res) => {
+app.post('/api/login', async (req, res) => {
     const { modid, password } = req.body;
 
     if (!modid || !password) {
@@ -207,7 +207,7 @@ app.post('/login', async (req, res) => {
 });
 
 // --- Logout Endpoint ---
-app.post('/logout', (req, res) => {
+app.post('/api/logout', (req, res) => {
     res.clearCookie('jwt_token', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -219,7 +219,7 @@ app.post('/logout', (req, res) => {
 // --- Protected Routes (ใช้ authenticateToken Middleware) ---
 // Route to save or update user data
 // ตรวจสอบว่ามี JWT ก่อนเข้าถึง
-app.post('/saveOrUpdateUser', authenticateToken, async (req, res) => {
+app.post('/api/saveOrUpdateUser', authenticateToken, async (req, res) => {
     // ดึง citizenId จาก JWT payload แทนที่จะรับจาก req.body โดยตรง
     const citizenIdFromToken = req.user.citizenId;
     const { rank, firstName, lastName, personType, roster, department, rosterName, level1Department } = req.body;
@@ -254,7 +254,7 @@ app.post('/saveOrUpdateUser', authenticateToken, async (req, res) => {
 });
 
 // Route to save or update assessment results
-app.post('/saveAssessmentResults', authenticateToken, async (req, res) => {
+app.post('/api/saveAssessmentResults', authenticateToken, async (req, res) => {
     const citizenIdFromToken = req.user.citizenId; // ใช้ citizenId จาก Token
     const {
         hopeScore,
@@ -310,7 +310,7 @@ app.post('/saveAssessmentResults', authenticateToken, async (req, res) => {
 });
 
 // Route to generate report
-app.get('/report', authenticateToken, async (req, res) => {
+app.get('/api/report', authenticateToken, async (req, res) => {
    const criteria = { hope: 33, selfEfficacy: 41, resilience: 41, optimism: 33 };
    try {
      const queryString = `
@@ -335,7 +335,7 @@ app.get('/report', authenticateToken, async (req, res) => {
    }
 });
 
-app.get('/getAssessmentResults/:citizenId', authenticateToken, async (req, res) => {
+app.get('/api/getAssessmentResults/:citizenId', authenticateToken, async (req, res) => {
    // ตรวจสอบว่า citizenId ที่ร้องขอตรงกับ citizenId ใน Token หรือไม่ (ป้องกันการดึงข้อมูลของคนอื่น)
    const requestedCitizenId = req.params.citizenId;
    const citizenIdFromToken = req.user.citizenId;
@@ -435,47 +435,6 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
         console.error('Error in /api/user-profile route:', error);
         res.status(500).json({ message: 'Failed to fetch or process user profile details.' });
     }
-});
-
-
-// ปรับแก้ Route /getAssessmentResults/:citizenId
-app.get('/getAssessmentResults/:citizenId', authenticateToken, async (req, res) => {
- const requestedCitizenId = req.params.citizenId;
- const citizenIdFromToken = req.user.citizenId;
-
- // หาก Frontend ส่ง '/self' มา, ให้ใช้ citizenId จาก Token
- let targetCitizenId = requestedCitizenId;
- if (requestedCitizenId === 'self') {
-     targetCitizenId = citizenIdFromToken;
- }
-
- // ตรวจสอบว่า citizenId ที่ร้องขอ (หลังจาก Resolve 'self' แล้ว) ตรงกับ citizenId ใน Token หรือไม่
- if (targetCitizenId !== citizenIdFromToken) {
-     return res.status(403).json({ message: 'Forbidden: You can only view your own assessment results.' });
- }
-
- // ตรวจสอบรูปแบบ citizenId
- if (!targetCitizenId || !/^\d{13}$/.test(targetCitizenId)) {
-   return res.status(400).json({ message: 'Invalid Citizen ID format.' });
- }
-
- try {
-   const results = await exports.query(
-     `SELECT hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage
-      FROM assessment_results
-      WHERE citizenId = ?`,
-     [targetCitizenId]
-   );
-   if (results.length > 0) {
-     res.json(results[0]);
-   } else {
-     // ถ้าไม่พบผลลัพธ์ ควรส่ง 404 เพื่อให้ Frontend ทราบว่าไม่มีข้อมูล
-     res.status(404).json({ message: 'No assessment results found for this citizen ID.' });
-   }
- } catch (error) {
-   console.error('Error fetching assessment results:', error);
-   res.status(500).json({ error: 'Error fetching assessment results. Please try again later.' });
- }
 });
 
 app.listen(5000, () => {
