@@ -144,7 +144,7 @@ app.post('/api/login', async (req, res) => {
             // Login successful with SOAP, now get user info from SOAP service
             const userInfoResponse = await axios.post('http://frontend/webservice/getinfobycitizenid.php', null, { // **สำคัญ: เปลี่ยน URL SOAP service ให้ถูกต้อง**
                 params: { citizenid: citizenId, check: 'check' },
-                timeout: 10000,
+                timeout: 30000,
             });
             const userInfo = userInfoResponse.data;
 
