@@ -366,7 +366,7 @@ app.get('/getAssessmentResults/:citizenId', authenticateToken, async (req, res) 
    }
 });
 
-app.get('/api/user-profile', authenticateToken, async (req, res) => {
+app.get('api/user-profile', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
 
     if (!citizenId) {
