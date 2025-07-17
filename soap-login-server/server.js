@@ -383,7 +383,11 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
         });
 
         // --- ใช้ xml2js ในการ Parse ข้อมูล ---
-        const parser = new xml2js.Parser({ explicitArray: false, ignoreAttrs: true });
+        const parser = new xml2js.Parser({ 
+            explicitArray: false, 
+            tagNameProcessors: [xml2js.processors.stripPrefix],
+            ignoreAttrs: true // เพิ่ม option นี้เข้าไป
+        });
         const result = await parser.parseStringPromise(userInfoResponse.data);
 
         // ตรวจสอบโครงสร้างของ XML ที่ได้รับกลับมา (อาจต้องปรับตาม Response จริง)
