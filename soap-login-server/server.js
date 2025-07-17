@@ -20,7 +20,6 @@ app.use((req, res, next) => {
 });
 
 // --- CORS Configuration ---
-// กำหนด Origin ตาม Environment (Development vs Production)
 app.use(cors({
     origin: process.env.NODE_ENV === 'production' 
         ? 'https://psycap.nmd.go.th' 
@@ -35,7 +34,6 @@ app.use(cookieParser());
 // --- MySQL Connection ---
 let db;
 let databaseConnected = false;
-
 function connectDB() {
     db = mysql.createConnection({
         host: process.env.MYSQL_HOST,
@@ -76,23 +74,20 @@ app.use((req, res, next) => {
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_please_change_in_production_env';
 
-// --- XML Parser Configuration (ใช้ร่วมกัน) ---
+// --- XML Parser Configuration ---
 const xmlParser = new xml2js.Parser({
     explicitArray: false,
     tagNameProcessors: [xml2js.processors.stripPrefix],
-    ignoreAttrs: true, // แก้ปัญหา "Unquoted attribute value"
+    ignoreAttrs: true, 
 });
 
-// --- Middleware สำหรับตรวจสอบ JWT ---
+// --- Middleware: JWT Authentication ---
 const authenticateToken = (req, res, next) => {
     const token = req.cookies.jwt_token;
-    if (!token) {
-        return res.status(401).json({ message: 'Access Denied: No Token Provided.' });
-    }
+    if (!token) return res.status(401).json({ message: 'Access Denied: No Token Provided.' });
 
     try {
-        const verified = jwt.verify(token, JWT_SECRET);
-        req.user = verified;
+        req.user = jwt.verify(token, JWT_SECRET);
         next();
     } catch (err) {
         console.error('JWT Verification Error:', err.message);
@@ -105,9 +100,7 @@ const authenticateToken = (req, res, next) => {
 
 app.post('/api/login', async (req, res) => {
     const { modid, password } = req.body;
-    if (!modid || !password) {
-        return res.status(400).json({ message: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
-    }
+    if (!modid || !password) return res.status(400).json({ message: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
 
     const soapRequest = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="uri:checkauthentication"><soapenv:Header/><soapenv:Body><urn:checkauthentication><modid>${modid}</modid><password>${password}</password></urn:checkauthentication></soapenv:Body></soapenv:Envelope>`;
 
@@ -121,16 +114,13 @@ app.post('/api/login', async (req, res) => {
         const citizenId = authResult.Envelope.Body.checkauthenticationResponse.return;
 
         if (citizenId && /^\d{13}$/.test(citizenId)) {
-            const userPayload = { citizenId: citizenId, modid: modid };
-            const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '1h' });
-
+            const token = jwt.sign({ citizenId: citizenId, modid: modid }, JWT_SECRET, { expiresIn: '1h' });
             res.cookie('jwt_token', token, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'Lax',
                 maxAge: 3600 * 1000,
             });
-
             res.status(200).json({ message: 'Login successful!' });
         } else {
             res.status(401).json({ message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
@@ -138,19 +128,13 @@ app.post('/api/login', async (req, res) => {
     } catch (error) {
         console.error('Login Error:', error.message);
         let errorMessage = 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง';
-        if (error.code === 'ECONNABORTED') {
-            errorMessage = 'การเชื่อมต่อกับบริการยืนยันตัวตนใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง';
-        }
+        if (error.code === 'ECONNABORTED') errorMessage = 'การเชื่อมต่อกับบริการยืนยันตัวตนใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง';
         res.status(500).json({ message: errorMessage });
     }
 });
 
 app.post('/api/logout', (req, res) => {
-    res.clearCookie('jwt_token', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'Lax',
-    });
+    res.clearCookie('jwt_token');
     res.status(200).json({ message: 'Logged out successfully.' });
 });
 
@@ -158,17 +142,15 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
     if (!citizenId) return res.status(400).json({ message: 'Citizen ID not found in token.' });
 
+    // **แก้ไข: สร้าง SOAP Envelope สำหรับ getinfobycitizenid**
+    const soapInfoRequest = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="uri:getinfobycitizenid"><soapenv:Header/><soapenv:Body><urn:getinfobycitizenid><citizenid>${citizenId}</citizenid><check>check</check></urn:getinfobycitizenid></soapenv:Body></soapenv:Envelope>`;
+
     try {
-        const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
-            params: { citizenid: citizenId, check: 'check' },
+        // **แก้ไข: ส่ง SOAP Request ใน body ไม่ใช่ params**
+        const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, soapInfoRequest, {
+            headers: { 'Content-Type': 'text/xml', 'SOAPAction': 'uri:getinfobycitizenid' },
             timeout: 30000
         });
-
-        // --- เพิ่มบรรทัดนี้เข้าไป ---
-        console.log('--- SOAP Response for User Profile ---');
-        console.log(soapInfoResponse.data);
-        console.log('------------------------------------');
-        // ---------------------------
 
         const result = await xmlParser.parseStringPromise(soapInfoResponse.data);
         const userInfo = result.Envelope.Body.getinfobycitizenidResponse.return;
@@ -177,7 +159,7 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
             const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = userInfo;
             const insertQuery = `INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE \`rank\` = VALUES(\`rank\`), firstName = VALUES(firstName), lastName = VALUES(lastName), personType = VALUES(personType), roster = VALUES(roster), department = VALUES(department), rosterName = VALUES(rosterName), level1Department = VALUES(level1Department);`;
             await exports.query(insertQuery, [citizenId, Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department]);
-            
+
             console.log(`User data for ${citizenId} saved/updated.`);
             res.status(200).json({ message: 'User profile fetched successfully!', userInfo });
         } else {
@@ -192,7 +174,6 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
 app.post('/api/saveAssessmentResults', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
     const { hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage } = req.body;
-
     try {
         const queryString = `INSERT INTO assessment_results (citizenId, hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE hopeScore = VALUES(hopeScore), selfEfficacyScore = VALUES(selfEfficacyScore), resilienceScore = VALUES(resilienceScore), optimismScore = VALUES(optimismScore), hopeAverage = VALUES(hopeAverage), selfEfficacyAverage = VALUES(selfEfficacyAverage), resilienceAverage = VALUES(resilienceAverage), optimismAverage = VALUES(optimismAverage), overallAverage = VALUES(overallAverage);`;
         await exports.query(queryString, [citizenId, hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage]);
@@ -205,7 +186,6 @@ app.post('/api/saveAssessmentResults', authenticateToken, async (req, res) => {
 
 app.get('/api/getAssessmentResults/self', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
-
     try {
         const results = await exports.query('SELECT * FROM assessment_results WHERE citizenId = ?', [citizenId]);
         if (results.length > 0) {
