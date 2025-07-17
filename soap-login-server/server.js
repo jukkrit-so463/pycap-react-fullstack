@@ -3,10 +3,11 @@ const mysql = require('mysql');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const util = require('util');
+const axios = require('axios');
+const xml2js = require('xml2js');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
-
-const jwt = require('jsonwebtoken'); // เพิ่ม: สำหรับ JWT
-const cookieParser = require('cookie-parser'); // เพิ่ม: สำหรับจัดการ Cookie
 
 const app = express();
 
@@ -19,139 +20,107 @@ app.use((req, res, next) => {
 });
 
 // --- CORS Configuration ---
-// Allow credentials for HttpOnly cookies. Specify exact origin in production.
 app.use(cors({
-    origin: 'https://psycap.nmd.go.th', // **สำคัญมาก: เปลี่ยนเป็นโดเมน Frontend ของคุณใน Production**
+    origin: process.env.NODE_ENV === 'production' ? 'https://psycap.nmd.go.th' : 'http://localhost:3000',
     methods: ['GET', 'POST'],
-    credentials: true // อนุญาตให้ส่ง Cookie ข้าม Origin ได้
+    credentials: true
 }));
 
 app.use(bodyParser.json());
-app.use(cookieParser()); // เพิ่ม: ใช้ cookie-parser
+app.use(cookieParser());
 
-// --- MySQL Connection Retry Logic ---
-const MAX_RETRIES = 15;
-const RETRY_DELAY_MS = 5000;
+// --- MySQL Connection ---
 let db;
 let databaseConnected = false;
-
-function connectDB(retries = 0) {
-    if (retries >= MAX_RETRIES) {
-        console.error('Failed to connect to MySQL after multiple retries. Exiting Node.js process.');
-        process.exit(1);
-    }
-
+function connectDB() {
     db = mysql.createConnection({
         host: process.env.MYSQL_HOST,
         user: process.env.MYSQL_USER,
         password: process.env.MYSQL_PASSWORD,
         database: process.env.MYSQL_DATABASE,
-        // ssl: { rejectUnauthorized: false } // uncomment if using SSL/TLS with MySQL
     });
 
     db.connect(err => {
         if (err) {
-            console.log(`Database connection error (attempt ${retries + 1}/${MAX_RETRIES}):`, err.code);
-            console.log(`Retrying in ${RETRY_DELAY_MS / 1000} seconds...`);
-            setTimeout(() => connectDB(retries + 1), RETRY_DELAY_MS);
+            console.error('Database connection error:', err.code, '- Retrying in 5 seconds...');
+            setTimeout(connectDB, 5000);
         } else {
             console.log('Connected to MySQL');
             exports.query = util.promisify(db.query).bind(db);
             databaseConnected = true;
         }
     });
+
+    db.on('error', (err) => {
+        console.error('MySQL connection lost:', err.code);
+        if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
+            databaseConnected = false;
+            connectDB();
+        } else {
+            throw err;
+        }
+    });
 }
 connectDB();
 
-// Middleware to ensure database is connected
 app.use((req, res, next) => {
     if (!databaseConnected) {
-        return res.status(503).send({ message: 'Service Unavailable: Database connection not established.' });
+        return res.status(503).json({ message: 'Service Unavailable: Database connection not established.' });
     }
     next();
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_please_change_in_production_env'; // **สำคัญ: ต้องเปลี่ยนใน .env ให้เป็นคีย์ที่ซับซ้อนและยาว**
+const JWT_SECRET = process.env.JWT_SECRET || 'default_secret_key';
 
-// --- Middleware สำหรับตรวจสอบ JWT (Authentication) ---
+// --- XML Parser Configuration (ใช้ร่วมกัน) ---
+const xmlParser = new xml2js.Parser({
+    explicitArray: false,
+    tagNameProcessors: [xml2js.processors.stripPrefix],
+    ignoreAttrs: true, // แก้ปัญหา Unquoted attribute value
+    emptyTag: null,
+});
+
+// --- Middleware สำหรับตรวจสอบ JWT ---
 const authenticateToken = (req, res, next) => {
-    // ดึง Token จาก HttpOnly Cookie
     const token = req.cookies.jwt_token;
-
-    if (!token) {
-        return res.status(401).send({ message: 'Access Denied: No Token Provided.' });
-    }
+    if (!token) return res.status(401).json({ message: 'Access Denied: No Token Provided.' });
 
     try {
-        // ตรวจสอบและถอดรหัส Token
         const verified = jwt.verify(token, JWT_SECRET);
-        req.user = verified; // เก็บข้อมูลผู้ใช้ที่ถอดรหัสได้ไว้ใน req.user
-        next(); // ไปยัง Route ถัดไป
+        req.user = verified;
+        next();
     } catch (err) {
-        console.error('JWT Verification Error:', err.message);
-        // ลบ Cookie หาก Token ไม่ถูกต้องหรือหมดอายุ
-        res.clearCookie('jwt_token', {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production', // ต้องเป็น true ใน production (HTTPS)
-            sameSite: 'Lax', // หรือ 'None' ถ้ามีการส่งข้ามโดเมนที่ต่างกันมากๆ
-        });
-        return res.status(403).send({ message: 'Invalid Token.' });
+        res.clearCookie('jwt_token');
+        return res.status(403).json({ message: 'Invalid or expired token.' });
     }
 };
 
-// --- New Login Endpoint ---
+// --- API Routes ---
+
 app.post('/api/login', async (req, res) => {
     const { modid, password } = req.body;
+    if (!modid || !password) return res.status(400).json({ message: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
 
-    if (!modid || !password) {
-        return res.status(400).send({ message: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' });
-    }
-
-    // สร้าง SOAP Request เหมือนเดิม (สมมติว่า service นี้อยู่ใน Backend เดียวกัน หรือเข้าถึงได้จาก Backend)
-    const soapRequest = `
-        <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="uri:checkauthentication">
-            <soapenv:Header/>
-            <soapenv:Body>
-                <urn:checkauthentication>
-                    <modid>${modid}</modid>
-                    <password>${password}</password>
-                </urn:checkauthentication>
-            </soapenv:Body>
-        </soapenv:Envelope>
-    `;
+    const soapRequest = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="uri:checkauthentication"><soapenv:Header/><soapenv:Body><urn:checkauthentication><modid>${modid}</modid><password>${password}</password></urn:checkauthentication></soapenv:Body></soapenv:Envelope>`;
 
     try {
-        // Call external SOAP service for authentication (assuming axios is available for backend too)
-        const axios = require('axios'); // ต้องมั่นใจว่า axios ถูก require ไว้ด้วย
-        const xml2js = require('xml2js'); // ต้องมั่นใจว่า xml2js ถูก require ไว้ด้วย
-
-        const response = await axios.post('http://frontend/webservice/checkauthentication.php', soapRequest, { // **สำคัญ: เปลี่ยน URL SOAP service ให้ถูกต้อง**
-            headers: {
-                'Content-Type': 'text/xml',
-                'SOAPAction': 'uri:checkauthentication',
-            },
-            timeout: 10000,
+        const soapAuthResponse = await axios.post('http://frontend/webservice/checkauthentication.php', soapRequest, {
+            headers: { 'Content-Type': 'text/xml', 'SOAPAction': 'uri:checkauthentication' },
+            timeout: 30000
         });
 
-        const parser = new xml2js.Parser({ explicitArray: false, ignoreAttrs: true });
-        const result = await parser.parseStringPromise(response.data);
-
-        const soapBody = result['SOAP-ENV:Envelope']['SOAP-ENV:Body'];
-        const soapResponse = soapBody['ns1:checkauthenticationResponse'];
-        const citizenId = soapResponse['return'];
+        const authResult = await xmlParser.parseStringPromise(soapAuthResponse.data);
+        const citizenId = authResult.Envelope.Body.checkauthenticationResponse.return;
 
         if (citizenId && /^\d{13}$/.test(citizenId)) {
-            // Login successful with SOAP, now get user info from SOAP service
-            const userInfoResponse = await axios.post('http://frontend/webservice/getinfobycitizenid.php', null, { // **สำคัญ: เปลี่ยน URL SOAP service ให้ถูกต้อง**
+            const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
                 params: { citizenid: citizenId, check: 'check' },
-                timeout: 10000,
+                timeout: 30000
             });
-            const userInfo = userInfoResponse.data;
 
-            // Optional: Save/Update user info in your local DB
-            // This logic is already in /saveOrUpdateUser, consider calling it internally
-            // or making sure necessary fields are present for JWT payload.
-            // For simplicity, we'll use a subset of info for JWT
+            const infoResult = await xmlParser.parseStringPromise(soapInfoResponse.data);
+            const userInfo = infoResult.Envelope.Body.getinfobycitizenidResponse.return;
+
             const userPayload = {
                 citizenId: citizenId,
                 modid: modid,
@@ -159,61 +128,60 @@ app.post('/api/login', async (req, res) => {
                 lastName: userInfo.LastName,
                 rank: userInfo.Rank,
                 level1Department: userInfo.Level1Department,
-                // Add any other crucial info needed for future requests
             };
 
-            // Create JWT
-            const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '1h' }); // Token หมดอายุใน 1 ชั่วโมง
+            const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '1h' });
 
-            // Set JWT as an HttpOnly cookie
             res.cookie('jwt_token', token, {
-                httpOnly: true, // ทำให้ JavaScript เข้าถึงไม่ได้ (ป้องกัน XSS)
-                secure: process.env.NODE_ENV === 'production', // ใช้ HTTPS เท่านั้นใน Production
-                sameSite: 'Lax', // หรือ 'Strict' หรือ 'None' (ต้องใช้ secure: true ด้วย)
-                maxAge: 3600000, // 1 ชั่วโมง (ใน milliseconds)
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'Lax',
+                maxAge: 3600 * 1000,
             });
 
-            // Send back a success message and perhaps limited user info (without citizenId directly)
-            res.status(200).json({
-                message: 'Login successful!',
-                userInfo: {
-                    firstName: userInfo.FirstName,
-                    lastName: userInfo.LastName,
-                    rank: userInfo.Rank,
-                    level1Department: userInfo.Level1Department,
-                },
-                // Do NOT send the token in the response body if you're using HttpOnly cookies.
-                // It defeats the purpose of HttpOnly.
-            });
-
+            res.status(200).json({ message: 'Login successful!' });
         } else {
-            res.status(401).send({ message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+            res.status(401).json({ message: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
         }
     } catch (error) {
-        console.error('Login error:', error);
-        // Generic error message to user
+        console.error('Login Error:', error.message);
         let errorMessage = 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง';
-        if (error.code === 'ECONNABORTED') {
-            errorMessage = 'การเชื่อมต่อกับบริการยืนยันตัวตนใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง';
-        } else if (error.response && error.response.status === 404) {
-            errorMessage = 'ไม่พบ SOAP service กรุณาตรวจสอบการตั้งค่าเซิร์ฟเวอร์';
-        } else if (error.response) {
-            errorMessage = `เกิดข้อผิดพลาดในการเชื่อมต่อบริการยืนยันตัวตน (${error.response.status})`;
-        } else if (error.request) {
-            errorMessage = 'ไม่สามารถเชื่อมต่อกับบริการยืนยันตัวตนได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่าย';
-        }
-        res.status(500).send({ message: errorMessage });
+        if (error.code === 'ECONNABORTED') errorMessage = 'การเชื่อมต่อกับบริการยืนยันตัวตนใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง';
+        res.status(500).json({ message: errorMessage });
     }
 });
 
-// --- Logout Endpoint ---
 app.post('/api/logout', (req, res) => {
-    res.clearCookie('jwt_token', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'Lax',
-    });
-    res.status(200).send({ message: 'Logged out successfully.' });
+    res.clearCookie('jwt_token');
+    res.status(200).json({ message: 'Logged out successfully.' });
+});
+
+app.get('/api/user-profile', authenticateToken, async (req, res) => {
+    const { citizenId } = req.user;
+    if (!citizenId) return res.status(400).json({ message: 'Citizen ID not found in token.' });
+
+    try {
+        const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
+            params: { citizenid: citizenId, check: 'check' },
+            timeout: 30000
+        });
+
+        const result = await xmlParser.parseStringPromise(soapInfoResponse.data);
+        const userInfo = result.Envelope.Body.getinfobycitizenidResponse.return;
+
+        if (userInfo && typeof userInfo === 'object') {
+            const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = userInfo;
+            const insertQuery = `INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE \`rank\` = VALUES(\`rank\`), firstName = VALUES(firstName), lastName = VALUES(lastName), personType = VALUES(personType), roster = VALUES(roster), department = VALUES(department), rosterName = VALUES(rosterName), level1Department = VALUES(level1Department);`;
+            await exports.query(insertQuery, [citizenId, Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department]);
+            console.log(`User data for ${citizenId} saved/updated.`);
+            res.status(200).json({ message: 'User profile fetched successfully!', userInfo });
+        } else {
+            throw new Error('Could not parse user info from SOAP response.');
+        }
+    } catch (error) {
+        console.error('Error in /api/user-profile route:', error.message);
+        res.status(500).json({ message: 'Failed to fetch or process user profile details.' });
+    }
 });
 
 // --- Protected Routes (ใช้ authenticateToken Middleware) ---
