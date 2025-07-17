@@ -437,47 +437,6 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
     }
 });
 
-
-// ปรับแก้ Route /getAssessmentResults/:citizenId
-app.get('/getAssessmentResults/:citizenId', authenticateToken, async (req, res) => {
- const requestedCitizenId = req.params.citizenId;
- const citizenIdFromToken = req.user.citizenId;
-
- // หาก Frontend ส่ง '/self' มา, ให้ใช้ citizenId จาก Token
- let targetCitizenId = requestedCitizenId;
- if (requestedCitizenId === 'self') {
-     targetCitizenId = citizenIdFromToken;
- }
-
- // ตรวจสอบว่า citizenId ที่ร้องขอ (หลังจาก Resolve 'self' แล้ว) ตรงกับ citizenId ใน Token หรือไม่
- if (targetCitizenId !== citizenIdFromToken) {
-     return res.status(403).json({ message: 'Forbidden: You can only view your own assessment results.' });
- }
-
- // ตรวจสอบรูปแบบ citizenId
- if (!targetCitizenId || !/^\d{13}$/.test(targetCitizenId)) {
-   return res.status(400).json({ message: 'Invalid Citizen ID format.' });
- }
-
- try {
-   const results = await exports.query(
-     `SELECT hopeScore, selfEfficacyScore, resilienceScore, optimismScore, hopeAverage, selfEfficacyAverage, resilienceAverage, optimismAverage, overallAverage
-      FROM assessment_results
-      WHERE citizenId = ?`,
-     [targetCitizenId]
-   );
-   if (results.length > 0) {
-     res.json(results[0]);
-   } else {
-     // ถ้าไม่พบผลลัพธ์ ควรส่ง 404 เพื่อให้ Frontend ทราบว่าไม่มีข้อมูล
-     res.status(404).json({ message: 'No assessment results found for this citizen ID.' });
-   }
- } catch (error) {
-   console.error('Error fetching assessment results:', error);
-   res.status(500).json({ error: 'Error fetching assessment results. Please try again later.' });
- }
-});
-
 app.listen(5000, () => {
   console.log('Server running on port 5000');
 });
