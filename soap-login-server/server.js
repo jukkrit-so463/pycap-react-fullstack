@@ -164,6 +164,12 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
             timeout: 30000
         });
 
+        // --- เพิ่มบรรทัดนี้เข้าไป ---
+        console.log('--- SOAP Response for User Profile ---');
+        console.log(soapInfoResponse.data);
+        console.log('------------------------------------');
+        // ---------------------------
+
         const result = await xmlParser.parseStringPromise(soapInfoResponse.data);
         const userInfo = result.Envelope.Body.getinfobycitizenidResponse.return;
 
