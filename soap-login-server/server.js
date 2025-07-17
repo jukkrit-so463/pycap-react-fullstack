@@ -109,7 +109,6 @@ app.post('/api/login', async (req, res) => {
             headers: { 'Content-Type': 'text/xml', 'SOAPAction': 'uri:checkauthentication' },
             timeout: 30000
         });
-
         const authResult = await xmlParser.parseStringPromise(soapAuthResponse.data);
         const citizenId = authResult.Envelope.Body.checkauthenticationResponse.return;
 
@@ -142,11 +141,10 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
     if (!citizenId) return res.status(400).json({ message: 'Citizen ID not found in token.' });
 
-    // **แก้ไข: สร้าง SOAP Envelope สำหรับ getinfobycitizenid**
-    const soapInfoRequest = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="uri:getinfobycitizenid"><soapenv:Header/><soapenv:Body><urn:getinfobycitizenid><citizenid>${citizenId}</citizenid><check>check</check></urn:getinfobycitizenid></soapenv:Body></soapenv:Envelope>`;
+    // **แก้ไข: สร้าง SOAP Envelope ที่ถูกต้องโดยไม่มี <check>**
+    const soapInfoRequest = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="uri:getinfobycitizenid"><soapenv:Header/><soapenv:Body><urn:getinfobycitizenid><citizenid>${citizenId}</citizenid></urn:getinfobycitizenid></soapenv:Body></soapenv:Envelope>`;
 
     try {
-        // **แก้ไข: ส่ง SOAP Request ใน body ไม่ใช่ params**
         const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, soapInfoRequest, {
             headers: { 'Content-Type': 'text/xml', 'SOAPAction': 'uri:getinfobycitizenid' },
             timeout: 30000
