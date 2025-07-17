@@ -366,70 +366,75 @@ app.get('/getAssessmentResults/:citizenId', authenticateToken, async (req, res) 
    }
 });
 
-app.get('/user-profile', authenticateToken, async (req, res) => {
-  // ข้อมูลผู้ใช้ (citizenId, firstName, etc.) ถูกเก็บไว้ใน req.user โดย authenticateToken middleware
-  const { citizenId, modid, firstName, lastName, rank, level1Department } = req.user;
+app.get('/api/user-profile', authenticateToken, async (req, res) => {
+    const { citizenId } = req.user;
 
-  try {
-      // คุณสามารถเลือกได้ว่าจะ:
-      // 1. ดึงข้อมูลจากฐานข้อมูลของคุณเอง (users table) เพื่อความรวดเร็ว
-      // 2. เรียก SOAP service อีกครั้งเพื่อดึงข้อมูลที่สดใหม่ (ถ้าจำเป็น)
-      // สำหรับตัวอย่างนี้ เราจะส่งข้อมูลที่อยู่ใน JWT Payload กลับไปเลย
-      // หากต้องการข้อมูลเพิ่มเติมที่ไม่ได้อยู่ใน JWT เช่น PersonType, Roster, Department, RosterName
-      // คุณจะต้อง Query จาก DB หรือเรียก SOAP service อีกครั้ง
+    if (!citizenId) {
+        return res.status(400).json({ message: 'Citizen ID not found in token.' });
+    }
 
-      // ตัวอย่างการเรียก SOAP service อีกครั้งเพื่อดึงข้อมูลเต็ม
-      const axios = require('axios');
-      const xml2js = require('xml2js');
-      
-      const userInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
-        params: { citizenid: citizenId, check: 'check' },
-        headers: { Accept: '*/*' },
-      });
+    try {
+        // เรียก SOAP service เพื่อดึงข้อมูลผู้ใช้
+        const axios = require('axios');
+        const xml2js = require('xml2js');
 
-      // Parse SOAP response (เหมือนใน Login endpoint)
-      const arrayDataMatch = userInfoResponse.data.match(/Array\s*\(([^)]+)\)/);
-      let fullUserInfo = {};
-      if (arrayDataMatch) {
-          const arrayData = arrayDataMatch[1]
-              .split('\n')
-              .map(line => line.trim())
-              .filter(line => line.includes('=>'))
-              .reduce((acc, line) => {
-                  const [key, value] = line.split('=>').map(item => item.trim());
-                  acc[key.replace(/[\[\]]/g, '')] = value;
-                  return acc;
-              }, {});
+        const userInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
+            params: { citizenid: citizenId, check: 'check' }
+        });
 
-          fullUserInfo = {
-              Rank: arrayData['Rank'],
-              FirstName: arrayData['FirstName'],
-              LastName: arrayData['LastName'],
-              PersonType: arrayData['PersonType'],
-              Roster: arrayData['Roster'],
-              Department: arrayData['Department'],
-              RosterName: arrayData['RosterName'],
-              Level1Department: arrayData['Level1Department'],
-          };
-      } else {
-          console.warn('Unable to parse SOAP user info response for citizenId:', citizenId);
-          // Fallback to info from JWT if SOAP parsing fails
-          fullUserInfo = { Rank: rank, FirstName: firstName, LastName: lastName, Level1Department: level1Department };
-      }
+        // --- ใช้ xml2js ในการ Parse ข้อมูล ---
+        const parser = new xml2js.Parser({ explicitArray: false, ignoreAttrs: true });
+        const result = await parser.parseStringPromise(userInfoResponse.data);
 
+        // ตรวจสอบโครงสร้างของ XML ที่ได้รับกลับมา (อาจต้องปรับตาม Response จริง)
+        const userInfoResult = result['SOAP-ENV:Envelope']['SOAP-ENV:Body']['ns1:getinfobycitizenidResponse']['return'];
 
-      // ส่งข้อมูลผู้ใช้กลับไปให้ Frontend
-      res.status(200).json({
-          message: 'User profile fetched successfully!',
-          userInfo: fullUserInfo
-      });
+        let fullUserInfo = {};
+        // ตรวจสอบว่าได้ข้อมูลกลับมาจริง
+        if (userInfoResult && typeof userInfoResult === 'object') {
+             fullUserInfo = {
+                Rank: userInfoResult.Rank,
+                FirstName: userInfoResult.FirstName,
+                LastName: userInfoResult.LastName,
+                PersonType: userInfoResult.PersonType,
+                Roster: userInfoResult.Roster,
+                Department: userInfoResult.Department,
+                RosterName: userInfoResult.RosterName,
+                Level1Department: userInfoResult.Level1Department,
+            };
 
-  } catch (error) {
-      console.error('Error fetching user profile from SOAP:', error);
-      // หาก SOAP service มีปัญหา, อาจจะส่งข้อมูลบางส่วนจาก JWT กลับไป หรือแจ้ง error
-      // สำหรับตอนนี้, จะส่ง error กลับไปเพื่อให้ frontend แสดงผล
-      res.status(500).json({ message: 'Failed to fetch user profile details.' });
-  }
+            // --- บันทึกข้อมูลลง Database ---
+            const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = fullUserInfo;
+            const queryString = `
+                INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                \`rank\` = VALUES(\`rank\`),
+                firstName = VALUES(firstName),
+                lastName = VALUES(lastName),
+                personType = VALUES(personType),
+                roster = VALUES(roster),
+                department = VALUES(department),
+                rosterName = VALUES(rosterName),
+                level1Department = VALUES(level1Department);
+            `;
+            await exports.query(queryString, [citizenId, Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department]);
+            console.log(`User data for ${citizenId} saved to database.`);
+
+        } else {
+             console.warn('Could not parse user info from SOAP response for citizenId:', citizenId);
+        }
+
+        // ส่งข้อมูลผู้ใช้กลับไปให้ Frontend
+        res.status(200).json({
+            message: 'User profile fetched successfully!',
+            userInfo: fullUserInfo
+        });
+
+    } catch (error) {
+        console.error('Error in /api/user-profile route:', error);
+        res.status(500).json({ message: 'Failed to fetch or process user profile details.' });
+    }
 });
 
 
