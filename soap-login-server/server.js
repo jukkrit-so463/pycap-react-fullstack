@@ -141,12 +141,11 @@ app.post('/api/logout', (req, res) => {
 app.get('/api/user-profile', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
     if (!citizenId) return res.status(400).json({ message: 'Citizen ID not found in token.' });
-    
-    // **แก้ไข: ส่งพารามิเตอร์เป็น URL Query String ไม่ใช่ SOAP Body**
+
     try {
-        const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
-            params: { citizenid: citizenId, check: 'check' }, // **ส่งเป็น params ที่นี่**
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, // **เปลี่ยน Content-Type**
+        // **แก้ไข: เปลี่ยนเป็น GET request และส่ง params**
+        const soapInfoResponse = await axios.get(`http://frontend/webservice/getinfobycitizenid.php`, {
+            params: { citizenid: citizenId, check: 'check' },
             timeout: 30000
         });
 
@@ -157,7 +156,7 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
             const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = userInfo;
             const insertQuery = `INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE \`rank\` = VALUES(\`rank\`), firstName = VALUES(firstName), lastName = VALUES(lastName), personType = VALUES(personType), roster = VALUES(roster), department = VALUES(department), rosterName = VALUES(rosterName), level1Department = VALUES(level1Department);`;
             await exports.query(insertQuery, [citizenId, Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department]);
-            
+
             console.log(`User data for ${citizenId} saved/updated.`);
             res.status(200).json({ message: 'User profile fetched successfully!', userInfo });
         } else {
@@ -168,8 +167,6 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Failed to fetch or process user profile details.' });
     }
 });
-
-// ... (ส่วนที่เหลือของโค้ดเหมือนเดิม)
 
 app.post('/api/saveAssessmentResults', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
