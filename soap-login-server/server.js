@@ -75,11 +75,11 @@ app.use((req, res, next) => {
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_please_change_in_production_env';
 
-// --- XML Parser Configuration (ใช้ร่วมกัน) ---
+// --- XML Parser Configuration ---
 const xmlParser = new xml2js.Parser({
     explicitArray: false,
     tagNameProcessors: [xml2js.processors.stripPrefix],
-    ignoreAttrs: true, // **แก้ไขปัญหา "Unquoted attribute value"**
+    ignoreAttrs: true, 
 });
 
 // --- Middleware: JWT Authentication ---
@@ -141,11 +141,14 @@ app.post('/api/logout', (req, res) => {
 app.get('/api/user-profile', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
     if (!citizenId) return res.status(400).json({ message: 'Citizen ID not found in token.' });
-    
-    // **แก้ไข: ส่งพารามิเตอร์เป็น URL Query String ไม่ใช่ SOAP Body**
+
+    // **แก้ไข: สร้าง SOAP Envelope สำหรับ getinfobycitizenid**
+    const soapInfoRequest = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="uri:getinfobycitizenid"><soapenv:Header/><soapenv:Body><urn:getinfobycitizenid><citizenid>${citizenId}</citizenid></urn:getinfobycitizenid></soapenv:Body></soapenv:Envelope>`;
+
     try {
-        const soapInfoResponse = await axios.get(`http://frontend/webservice/getinfobycitizenid.php`, {
-            params: { citizenid: citizenId, check: 'check' }, // **ส่งเป็น params ที่นี่**
+        // **แก้ไข: เปลี่ยนกลับไปใช้ POST และส่ง SOAP Request ใน Body**
+        const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, soapInfoRequest, {
+            headers: { 'Content-Type': 'text/xml', 'SOAPAction': 'uri:getinfobycitizenid' },
             timeout: 30000
         });
 
@@ -156,7 +159,7 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
             const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = userInfo;
             const insertQuery = `INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE \`rank\` = VALUES(\`rank\`), firstName = VALUES(firstName), lastName = VALUES(lastName), personType = VALUES(personType), roster = VALUES(roster), department = VALUES(department), rosterName = VALUES(rosterName), level1Department = VALUES(level1Department);`;
             await exports.query(insertQuery, [citizenId, Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department]);
-            
+
             console.log(`User data for ${citizenId} saved/updated.`);
             res.status(200).json({ message: 'User profile fetched successfully!', userInfo });
         } else {
@@ -167,9 +170,6 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Failed to fetch or process user profile details.' });
     }
 });
-
-
-// ... (ส่วนที่เหลือของโค้ดเหมือนเดิม)
 
 app.post('/api/saveAssessmentResults', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
@@ -210,7 +210,6 @@ app.get('/api/report', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error generating report.' });
     }
 });
-
 
 app.listen(5000, () => {
   console.log('Server running on port 5000');
