@@ -141,8 +141,8 @@ app.post('/api/logout', (req, res) => {
 app.get('/api/user-profile', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
     if (!citizenId) return res.status(400).json({ message: 'Citizen ID not found in token.' });
-
-    // **แก้ไข: สร้าง SOAP Envelope สำหรับ getinfobycitizenid**
+    
+    // **แก้ไข: สร้าง SOAP Envelope ที่ถูกต้องโดยไม่มี <check>**
     const soapInfoRequest = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="uri:getinfobycitizenid"><soapenv:Header/><soapenv:Body><urn:getinfobycitizenid><citizenid>${citizenId}</citizenid></urn:getinfobycitizenid></soapenv:Body></soapenv:Envelope>`;
 
     try {
@@ -159,7 +159,7 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
             const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = userInfo;
             const insertQuery = `INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE \`rank\` = VALUES(\`rank\`), firstName = VALUES(firstName), lastName = VALUES(lastName), personType = VALUES(personType), roster = VALUES(roster), department = VALUES(department), rosterName = VALUES(rosterName), level1Department = VALUES(level1Department);`;
             await exports.query(insertQuery, [citizenId, Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department]);
-
+            
             console.log(`User data for ${citizenId} saved/updated.`);
             res.status(200).json({ message: 'User profile fetched successfully!', userInfo });
         } else {
