@@ -23,7 +23,7 @@ app.use((req, res, next) => {
 app.use(cors({
     origin: process.env.NODE_ENV === 'production' 
         ? 'https://psycap.nmd.go.th' 
-        : 'http://localhost:3000',
+        : ['http://localhost:3000', 'http://10.10.19.50'],
     methods: ['GET', 'POST'],
     credentials: true
 }));
@@ -59,8 +59,6 @@ function connectDB() {
             console.log('Reconnecting to MySQL...');
             databaseConnected = false;
             connectDB();
-        } else {
-            // For other critical errors, it might be better to let it crash and be restarted by a process manager
         }
     });
 }
@@ -143,14 +141,14 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
     if (!citizenId) return res.status(400).json({ message: 'Citizen ID not found in token.' });
     
     try {
-        // **แก้ไข: เปลี่ยนเป็น GET request และส่ง params**
-        const soapInfoResponse = await axios.get(`http://frontend/webservice/getinfobycitizenid.php`, {
-            params: { citizenid: citizenId, check: 'check' }, // **ส่งเป็น params ที่นี่**
+        // **แก้ไข: ใช้วิธีการเรียกแบบเดียวกับโค้ด Local ที่ทำงานได้**
+        const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
+            params: { citizenid: citizenId, check: 'check' },
             timeout: 30000
         });
 
-        const result = await xmlParser.parseStringPromise(soapInfoResponse.data);
-        const userInfo = result.Envelope.Body.getinfobycitizenidResponse.return;
+        // **ข้อมูลที่ได้กลับมาเป็น JSON อยู่แล้ว ไม่ต้อง Parse XML**
+        const userInfo = soapInfoResponse.data;
 
         if (userInfo && typeof userInfo === 'object') {
             const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = userInfo;
@@ -160,13 +158,14 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
             console.log(`User data for ${citizenId} saved/updated.`);
             res.status(200).json({ message: 'User profile fetched successfully!', userInfo });
         } else {
-            throw new Error('Could not parse user info from SOAP response.');
+            throw new Error('Could not get user info from service response.');
         }
     } catch (error) {
         console.error('Error in /api/user-profile route:', error.message);
         res.status(500).json({ message: 'Failed to fetch or process user profile details.' });
     }
 });
+
 
 app.post('/api/saveAssessmentResults', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
