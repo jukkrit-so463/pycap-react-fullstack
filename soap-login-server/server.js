@@ -45,10 +45,10 @@ function connectDB() {
 
     db.connect(err => {
         if (err) {
-            console.error('Database connection error:', err.code, '- Retrying in 5 seconds...');
-            setTimeout(connectDB, 5000);
+            // ...
         } else {
             console.log('Connected to MySQL');
+            db.query('SET NAMES utf8mb4'); // <--- เพิ่มบรรทัดนี้
             exports.query = util.promisify(db.query).bind(db);
             databaseConnected = true;
         }
