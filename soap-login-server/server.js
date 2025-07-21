@@ -7,6 +7,7 @@ const axios = require('axios');
 const xml2js = require('xml2js');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const iconv = require('iconv-lite'); // **เพิ่มบรรทัดนี้**
 require('dotenv').config();
 
 const app = express();
@@ -45,10 +46,11 @@ function connectDB() {
 
     db.connect(err => {
         if (err) {
-            // ...
+            console.error('Database connection error:', err.code, '- Retrying in 5 seconds...');
+            setTimeout(connectDB, 5000);
         } else {
             console.log('Connected to MySQL');
-            db.query('SET NAMES utf8mb4'); // <--- เพิ่มบรรทัดนี้
+            db.query('SET NAMES utf8mb4');
             exports.query = util.promisify(db.query).bind(db);
             databaseConnected = true;
         }
@@ -74,7 +76,7 @@ app.use((req, res, next) => {
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_please_change_in_production_env';
 
-// --- XML Parser (สำหรับ Login เท่านั้น) ---
+// --- XML Parser Configuration ---
 const xmlParser = new xml2js.Parser({
     explicitArray: false,
     tagNameProcessors: [xml2js.processors.stripPrefix],
@@ -142,16 +144,16 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
     if (!citizenId) return res.status(400).json({ message: 'Citizen ID not found in token.' });
     
     try {
-        // **แก้ไข: เรียก Endpoint และวิธีการให้ตรงกับที่ทดสอบสำเร็จ**
         const serviceResponse = await axios.post(`http://frontend/webservice/testgetinfobycitizenid.php`, null, {
             params: { citizenid: citizenId, check: 'check' },
-            timeout: 30000
+            timeout: 30000,
+            responseType: 'arraybuffer' // **แก้ไข: รับข้อมูลเป็น buffer**
         });
 
-        // **แก้ไข: เขียน Parser สำหรับอ่านข้อมูลจาก String รูปแบบ Array ของ PHP**
-        const responseText = serviceResponse.data;
-        const arrayMatch = responseText.match(/Array\s*\(([\s\S]*?)\)/);
+        // **แก้ไข: ถอดรหัส buffer ด้วย TIS-620**
+        const responseText = iconv.decode(Buffer.from(serviceResponse.data), 'TIS-620');
 
+        const arrayMatch = responseText.match(/Array\s*\(([\s\S]*?)\)/);
         if (!arrayMatch || !arrayMatch[1]) {
             throw new Error('Could not find user info array in the service response.');
         }
@@ -182,8 +184,6 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Failed to fetch or process user profile details.' });
     }
 });
-
-// ... (ส่วนที่เหลือของโค้ดเหมือนเดิม)
 
 app.post('/api/saveAssessmentResults', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
