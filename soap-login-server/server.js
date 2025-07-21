@@ -23,7 +23,7 @@ app.use((req, res, next) => {
 app.use(cors({
     origin: process.env.NODE_ENV === 'production' 
         ? 'https://psycap.nmd.go.th' 
-        : ['http://localhost:3000', 'http://10.10.19.50'],
+        : ['http://localhost:3000', 'http://10.10.19.50', 'http://psycap.nmd.go.th'],
     methods: ['GET', 'POST'],
     credentials: true
 }));
@@ -73,7 +73,7 @@ app.use((req, res, next) => {
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_please_change_in_production_env';
 
-// --- XML Parser Configuration ---
+// --- XML Parser (สำหรับ Login เท่านั้น) ---
 const xmlParser = new xml2js.Parser({
     explicitArray: false,
     tagNameProcessors: [xml2js.processors.stripPrefix],
@@ -141,24 +141,40 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
     if (!citizenId) return res.status(400).json({ message: 'Citizen ID not found in token.' });
     
     try {
-        // **แก้ไข: ใช้วิธีการเรียกแบบเดียวกับโค้ด Local ที่ทำงานได้**
-        const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, null, {
+        // **แก้ไข: เรียก Endpoint และวิธีการให้ตรงกับที่ทดสอบสำเร็จ**
+        const serviceResponse = await axios.post(`http://frontend/webservice/testgetinfobycitizenid.php`, null, {
             params: { citizenid: citizenId, check: 'check' },
             timeout: 30000
         });
 
-        // **ข้อมูลที่ได้กลับมาเป็น JSON อยู่แล้ว ไม่ต้อง Parse XML**
-        const userInfo = soapInfoResponse.data;
+        // **แก้ไข: เขียน Parser สำหรับอ่านข้อมูลจาก String รูปแบบ Array ของ PHP**
+        const responseText = serviceResponse.data;
+        const arrayMatch = responseText.match(/Array\s*\(([\s\S]*?)\)/);
 
-        if (userInfo && typeof userInfo === 'object') {
+        if (!arrayMatch || !arrayMatch[1]) {
+            throw new Error('Could not find user info array in the service response.');
+        }
+
+        const lines = arrayMatch[1].trim().split('\n');
+        const userInfo = {};
+        for (const line of lines) {
+            const parts = line.trim().split('=>');
+            if (parts.length === 2) {
+                const key = parts[0].trim().replace(/[\[\]]/g, '');
+                const value = parts[1].trim();
+                userInfo[key] = value;
+            }
+        }
+
+        if (userInfo && userInfo.FirstName) {
             const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = userInfo;
             const insertQuery = `INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE \`rank\` = VALUES(\`rank\`), firstName = VALUES(firstName), lastName = VALUES(lastName), personType = VALUES(personType), roster = VALUES(roster), department = VALUES(department), rosterName = VALUES(rosterName), level1Department = VALUES(level1Department);`;
-            await exports.query(insertQuery, [citizenId, Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department]);
+            await exports.query(insertQuery, [citizenId, Rank, FirstName, LastName, PersonType || null, Roster || null, Department || null, RosterName || null, Level1Department || null]);
             
             console.log(`User data for ${citizenId} saved/updated.`);
             res.status(200).json({ message: 'User profile fetched successfully!', userInfo });
         } else {
-            throw new Error('Could not get user info from service response.');
+            throw new Error('Parsed user info is empty or invalid.');
         }
     } catch (error) {
         console.error('Error in /api/user-profile route:', error.message);
@@ -166,6 +182,7 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
     }
 });
 
+// ... (ส่วนที่เหลือของโค้ดเหมือนเดิม)
 
 app.post('/api/saveAssessmentResults', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
