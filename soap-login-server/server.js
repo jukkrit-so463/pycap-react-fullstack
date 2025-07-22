@@ -139,45 +139,48 @@ app.post('/api/logout', (req, res) => {
     res.status(200).json({ message: 'Logged out successfully.' });
 });
 
+// ลบฟังก์ชัน app.get('/api/user-profile', ...) ของเก่าออกทั้งหมด
+// แล้วนำโค้ดนี้ไปวางแทนที่
+
 app.get('/api/user-profile', authenticateToken, async (req, res) => {
     const { citizenId } = req.user;
-    if (!citizenId) return res.status(400).json({ message: 'Citizen ID not found in token.' });
-    
+    if (!citizenId) {
+        return res.status(400).json({ message: 'Citizen ID not found in token.' });
+    }
+
+    // **สร้าง SOAP Envelope ที่ถูกต้องสำหรับ getinfobycitizenid**
+    const soapInfoRequest = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="uri:getinfobycitizenid">
+                                <soapenv:Header/>
+                                <soapenv:Body>
+                                    <urn:getinfobycitizenid>
+                                        <citizenid>${citizenId}</citizenid>
+                                    </urn:getinfobycitizenid>
+                                </soapenv:Body>
+                             </soapenv:Envelope>`;
+
     try {
-        const serviceResponse = await axios.post(`http://frontend/webservice/testgetinfobycitizenid.php`, null, {
-            params: { citizenid: citizenId, check: 'check' },
-            timeout: 30000,
-            responseType: 'arraybuffer' // **แก้ไข: รับข้อมูลเป็น buffer**
+        // **ส่งคำขอเป็น POST พร้อม SOAP Body ไปยัง Endpoint ตัวจริง**
+        const soapInfoResponse = await axios.post(`http://frontend/webservice/getinfobycitizenid.php`, soapInfoRequest, {
+            headers: { 
+                'Content-Type': 'text/xml', 
+                'SOAPAction': 'uri:getinfobycitizenid' 
+            },
+            timeout: 30000
         });
 
-        // **แก้ไข: ถอดรหัส buffer ด้วย TIS-620**
-        const responseText = iconv.decode(Buffer.from(serviceResponse.data), 'TIS-620');
+        // **ใช้ xmlParser ตัวเดิมเพื่อแปลงผลลัพธ์**
+        const result = await xmlParser.parseStringPromise(soapInfoResponse.data);
+        const userInfo = result.Envelope.Body.getinfobycitizenidResponse.return;
 
-        const arrayMatch = responseText.match(/Array\s*\(([\s\S]*?)\)/);
-        if (!arrayMatch || !arrayMatch[1]) {
-            throw new Error('Could not find user info array in the service response.');
-        }
-
-        const lines = arrayMatch[1].trim().split('\n');
-        const userInfo = {};
-        for (const line of lines) {
-            const parts = line.trim().split('=>');
-            if (parts.length === 2) {
-                const key = parts[0].trim().replace(/[\[\]]/g, '');
-                const value = parts[1].trim();
-                userInfo[key] = value;
-            }
-        }
-
-        if (userInfo && userInfo.FirstName) {
+        if (userInfo && typeof userInfo === 'object') {
             const { Rank, FirstName, LastName, PersonType, Roster, Department, RosterName, Level1Department } = userInfo;
             const insertQuery = `INSERT INTO users (citizenId, \`rank\`, firstName, lastName, personType, roster, department, rosterName, level1Department) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE \`rank\` = VALUES(\`rank\`), firstName = VALUES(firstName), lastName = VALUES(lastName), personType = VALUES(personType), roster = VALUES(roster), department = VALUES(department), rosterName = VALUES(rosterName), level1Department = VALUES(level1Department);`;
             await exports.query(insertQuery, [citizenId, Rank, FirstName, LastName, PersonType || null, Roster || null, Department || null, RosterName || null, Level1Department || null]);
             
-            console.log(`User data for ${citizenId} saved/updated.`);
+            console.log(`User data for ${citizenId} saved/updated from getinfobycitizenid.php.`);
             res.status(200).json({ message: 'User profile fetched successfully!', userInfo });
         } else {
-            throw new Error('Parsed user info is empty or invalid.');
+            throw new Error('Could not parse user info from SOAP response.');
         }
     } catch (error) {
         console.error('Error in /api/user-profile route:', error.message);
