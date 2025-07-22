@@ -64,7 +64,7 @@ const Login = () => {
         setError('การเชื่อมต่อถูกยกเลิก');
       } else if (error.response) {
         // Backend จะส่ง message ที่เหมาะสมกลับมา
-        setError(error.response.data.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง');
+        setError(error.response.data.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง ');
       } else if (error.request) {
         setError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่อเครือข่าย');
       } else {
