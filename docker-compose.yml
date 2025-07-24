@@ -11,12 +11,13 @@ services:
       - "5000:5000" # Host_Port:Container_Port - Backend จะรันบนพอร์ต 5000 ทั้งบน Host และใน Container
     environment:
       # Environment Variables สำหรับ Node.js Backend เพื่อเชื่อมต่อ MySQL และ JWT
-      MYSQL_HOST: db                  # ชี้ไปที่ชื่อ Service ของ MySQL ใน Docker Compose network
-      MYSQL_USER: ${DB_USER}          # ดึงค่าจากไฟล์ .env
-      MYSQL_PASSWORD: ${DB_PASSWORD}  # ดึงค่าจากไฟล์ .env
-      MYSQL_DATABASE: ${DB_DATABASE}  # ดึงค่าจากไฟล์ .env
-      JWT_SECRET: ${JWT_SECRET}       # ดึงค่าจากไฟล์ .env
-      NODE_ENV: production            # ตั้งค่าเป็น production เพื่อประสิทธิภาพและความปลอดภัย
+      - MYSQL_HOST=db                  # ชี้ไปที่ชื่อ Service ของ MySQL ใน Docker Compose network
+      - MYSQL_USER=${DB_USER}          # ดึงค่าจากไฟล์ .env
+      - MYSQL_PASSWORD=${DB_PASSWORD}  # ดึงค่าจากไฟล์ .env
+      - MYSQL_DATABASE=${DB_DATABASE}  # ดึงค่าจากไฟล์ .env
+      - JWT_SECRET=${JWT_SECRET}       # ดึงค่าจากไฟล์ .env
+      - NODE_ENV=production            # ตั้งค่าเป็น production เพื่อประสิทธิภาพและความปลอดภัย
+      - NODE_TLS_REJECT_UNAUTHORIZED=0 # <--- เพิ่มบรรทัดนี้ที่นี่ครับ
     depends_on:
       db:
         condition: service_healthy
