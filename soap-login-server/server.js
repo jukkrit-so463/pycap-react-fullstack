@@ -7,7 +7,7 @@ const axios = require('axios');
 const xml2js = require('xml2js');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
-const iconv = require('iconv-lite'); // **เพิ่มบรรทัดนี้**
+const iconv = require('iconv-lite');
 require('dotenv').config();
 
 const app = express();
@@ -23,8 +23,8 @@ app.use((req, res, next) => {
 // --- CORS Configuration ---
 app.use(cors({
     origin: process.env.NODE_ENV === 'production' 
-        ? 'https://psycap.nmd.go.th' 
-        : ['http://localhost:3000', 'http://10.10.19.50', 'http://psycap.nmd.go.th'],
+        ? ['https://psycap.nmd.go.th', 'http://psycap.nmd.go.th']
+        : ['http://localhost:3000', 'http://10.10.19.50'],
     methods: ['GET', 'POST'],
     credentials: true
 }));
@@ -76,7 +76,7 @@ app.use((req, res, next) => {
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_please_change_in_production_env';
 
-// --- XML Parser Configuration ---
+// --- XML Parser (สำหรับ Login เท่านั้น) ---
 const xmlParser = new xml2js.Parser({
     explicitArray: false,
     tagNameProcessors: [xml2js.processors.stripPrefix],
@@ -147,12 +147,11 @@ app.get('/api/user-profile', authenticateToken, async (req, res) => {
         const serviceResponse = await axios.post(`http://frontend/webservice/testgetinfobycitizenid.php`, null, {
             params: { citizenid: citizenId, check: 'check' },
             timeout: 30000,
-            responseType: 'arraybuffer' // **แก้ไข: รับข้อมูลเป็น buffer**
+            responseType: 'arraybuffer'
         });
 
-        // **แก้ไข: ถอดรหัส buffer ด้วย TIS-620**
         const responseText = iconv.decode(Buffer.from(serviceResponse.data), 'TIS-620');
-
+        
         const arrayMatch = responseText.match(/Array\s*\(([\s\S]*?)\)/);
         if (!arrayMatch || !arrayMatch[1]) {
             throw new Error('Could not find user info array in the service response.');
