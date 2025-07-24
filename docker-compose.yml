@@ -16,7 +16,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}  # ดึงค่าจากไฟล์ .env
       MYSQL_DATABASE: ${DB_DATABASE}  # ดึงค่าจากไฟล์ .env
       JWT_SECRET: ${JWT_SECRET}       # ดึงค่าจากไฟล์ .env
-      NODE_ENV: development            # ตั้งค่าเป็น production เพื่อประสิทธิภาพและความปลอดภัย
+      NODE_ENV: production            # ตั้งค่าเป็น production เพื่อประสิทธิภาพและความปลอดภัย
     depends_on:
       db:
         condition: service_healthy
@@ -32,6 +32,11 @@ services:
     container_name: soap-login-frontend # กำหนดชื่อ Container ให้ชัดเจน
     ports:
       - "80:80" # Host_Port:Container_Port - Frontend (Nginx) จะรันบนพอร์ต 80
+      - "443:443"
+    volumes: # <-- ให้มองหาส่วนนี้ใน service frontend
+      - ./soap-login:/app
+      - /app/node_modules
+      - ./nginx/ssl:/etc/nginx/ssl
     environment:
       # สำหรับ React (Create React App) ที่ต้องทราบ URL ของ Backend API
       # เนื่องจากจะใช้ Nginx Reverse Proxy, Frontend จะเรียก API ผ่าน path /api
